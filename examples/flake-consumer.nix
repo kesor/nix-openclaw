@@ -9,11 +9,15 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+    # nix-openclaw - pass openclaw-src as an input to override the default
     nix-openclaw = {
-      url = "github:YOUR_USER/nix-openclaw";       # ← your fork / the published repo
-      # To override the application source (e.g. use your own fork):
-      # inputs.openclaw-src.url = "github:you/openclaw/dev-branch";
-      # Or a local checkout:
+      url = "github:YOUR_USER/nix-openclaw"; # ← your fork / the published repo
+      inputs.openclaw-src.url = "github:openclaw/openclaw"; # default
+      # Use your own fork:
+      # inputs.openclaw-src.url = "github:you/openclaw";
+      # Use a private repo (via SSH):
+      # inputs.openclaw-src.url = "git+ssh://git@github.com/you/private-openclaw";
+      # Use a local path:
       # inputs.openclaw-src.url = "path:/home/you/projects/openclaw";
     };
 
@@ -21,37 +25,47 @@
     # home-manager.url = "github:nix-community/home-manager";
   };
 
-  outputs = { self, nixpkgs, nix-openclaw, ... }: {
-    nixosConfigurations.my-server = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        ./hardware-configuration.nix
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nix-openclaw,
+      ...
+    }:
+    {
+      nixosConfigurations.my-server = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./hardware-configuration.nix
 
-        # Import the OpenClaw NixOS module
-        nix-openclaw.nixosModules.default
+          # Import the OpenClaw NixOS module
+          nix-openclaw.nixosModules.default
 
-        # Your configuration
-        ({ ... }: {
-          services.openclaw = {
-            enable = true;
-            port   = 3000;
-            host   = "127.0.0.1";
+          # Your configuration
+          (
+            { ... }:
+            {
+              services.openclaw = {
+                enable = true;
+                port = 3000;
+                host = "127.0.0.1";
 
-            environmentFiles = [ "/var/lib/openclaw/secrets/env" ];
+                environmentFiles = [ "/var/lib/openclaw/secrets/env" ];
 
-            models.claude-sonnet = {
-              type      = "anthropic";
-              modelName = "claude-sonnet-4-20250514";
-              isDefault = true;
-            };
+                models.claude-sonnet = {
+                  type = "anthropic";
+                  modelName = "claude-sonnet-4-20250514";
+                  isDefault = true;
+                };
 
-            gitTracking.enable = true;
-            backup.enable      = true;
-          };
-        })
+                gitTracking.enable = true;
+                backup.enable = true;
+              };
+            }
+          )
 
-        # … your other modules (cloudflared, etc.)
-      ];
+          # … your other modules (cloudflared, etc.)
+        ];
+      };
     };
-  };
 }

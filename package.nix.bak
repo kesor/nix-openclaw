@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# File: package.nix
+# Description: Derivation that builds OpenClaw from source.
+#
+# This intentionally supports multiple build strategies so it can adapt
+# as the upstream project evolves.
+# ═══════════════════════════════════════════════════════════════════════════════
+{
+  lib,
+  stdenv,
+  nodejs_22,
+  pnpm_10,
+  makeWrapper,
+  cacert,
+  git,
+  src,
+  version ? "0-unstable",
+  depsHash ? lib.fakeHash,
+  strategy ? "shell",
+}:
+
+let
+  nodejs = nodejs_22;
+  pnpm = pnpm_10;
+
+  shellBuild = stdenv.mkDerivation {
+    pname = "openclaw";
+    inherit version src;
+
+    nativeBuildInputs = [
+      nodejs
+      pnpm
+      makeWrapper
+      cacert
+      git
+    ];
+
+    buildPhase = ''
+      runHook preBuild
+      export HOME=$TMPDIR
+      export npm_config_cache=$TMPDIR/.pnpm-store
+      export npm_config_nodedir=${nodejs}
+
+      # Use pnpm to install dependencies
+      pnpm install --frozen-lockfile --ignore-scripts
+
+      # Run build script if the project has one
+      if node -e "const p=require('./package.json'); process.exit(p.scripts?.build ? 0 : 1)" 2>/dev/null; then
+        pnpm run build
+      fi
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/lib/openclaw
+      cp -r . $out/lib/openclaw/
+
+      mkdir -p $out/bin
+
+      # Detect the entry-point from package.json bin field
+      ENTRY=$(node -e "const p=require('./package.json'); console.log(p.bin?.openclaw || p.main || 'index.js')" 2>/dev/null || echo "index.js")
+
+      # If there's a bin entry, use it directly
+      if [ -f "$out/lib/openclaw/$ENTRY" ]; then
+        makeWrapper ${nodejs}/bin/node $out/bin/openclaw \
+          --add-flags "$out/lib/openclaw/$ENTRY" \
+          --set NODE_ENV production \
+          --set NODE_PATH "$out/lib/openclaw/node_modules"
+      else
+        # Fallback: just run node directly
+        makeWrapper ${nodejs}/bin/node $out/bin/openclaw \
+          --set NODE_ENV production \
+          --set NODE_PATH "$out/lib/openclaw/node_modules"
+      fi
+
+      runHook postInstall
+    '';
+
+    # For production use, switch to buildNpmPackage with a fixed npmDepsHash.
+    # Build requires network access for pnpm install.
+
+    meta = with lib; {
+      description = "OpenClaw – AI-powered application";
+      platforms = platforms.linux;
+      mainProgram = "openclaw";
+    };
+  };
+
+in
+shellBuild
