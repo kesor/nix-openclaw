@@ -544,6 +544,10 @@ in
         exec journalctl -u openclaw.service -f "$@"
       '')
 
+      (pkgs.writeShellScriptBin "openclaw" ''
+        exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
+      '')
+
       (pkgs.writeShellScriptBin "openclaw-git" ''
         cd ${cfg.dataDir} && exec ${pkgs.git}/bin/git "$@"
       '')
