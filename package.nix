@@ -4,8 +4,6 @@
   nodejs_22,
   makeWrapper,
   esbuild,
-  git,
-  cmake,
   src,
   version ? "0-unstable",
   npmDepsHash ? lib.fakeHash,
@@ -17,11 +15,7 @@ buildNpmPackage {
 
   makeCacheWritable = true;
 
-  nativeBuildInputs = [
-    makeWrapper
-    git
-    cmake
-  ];
+  nativeBuildInputs = [ makeWrapper ];
 
   # Provide esbuild from nixpkgs instead of npm
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
