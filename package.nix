@@ -5,13 +5,12 @@
   makeWrapper,
   src,
   version ? "0-unstable",
+  npmDepsHash ? lib.fakeHash,
 }:
 
 buildNpmPackage {
   pname = "openclaw";
-  inherit version src;
-
-  npmDepsHash = "sha256-FvCQrTHkN7pXXZp1wv/YdkCrKNZhsxLXt7I6OVOmRl0=";
+  inherit version src npmDepsHash;
 
   nativeBuildInputs = [ makeWrapper ];
 
