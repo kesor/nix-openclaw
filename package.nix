@@ -11,7 +11,7 @@ buildNpmPackage {
   pname = "openclaw";
   inherit version src;
 
-  npmDepsHash = lib.fakeHash;
+  npmDepsHash = "sha256-FvCQrTHkN7pXXZp1wv/YdkCrKNZhsxLXt7I6OVOmRl0=";
 
   nativeBuildInputs = [ makeWrapper ];
 
