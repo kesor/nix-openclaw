@@ -3,6 +3,8 @@
   buildNpmPackage,
   nodejs_22,
   makeWrapper,
+  git,
+  cmake,
   src,
   version ? "0-unstable",
   npmDepsHash ? lib.fakeHash,
@@ -14,7 +16,11 @@ buildNpmPackage {
 
   makeCacheWritable = true;
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [
+    makeWrapper
+    git
+    cmake
+  ];
 
   buildPhase = ''
     runHook preBuild
