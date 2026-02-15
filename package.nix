@@ -3,6 +3,7 @@
   buildNpmPackage,
   nodejs_22,
   makeWrapper,
+  esbuild,
   git,
   cmake,
   src,
@@ -15,13 +16,15 @@ buildNpmPackage {
   inherit version src npmDepsHash;
 
   makeCacheWritable = true;
-  npmInstallFlags = [ "--omit=optional" ];
 
   nativeBuildInputs = [
     makeWrapper
     git
     cmake
   ];
+
+  # Provide esbuild from nixpkgs instead of npm
+  ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
 
   buildPhase = ''
     runHook preBuild
