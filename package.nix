@@ -1,7 +1,8 @@
 {
   lib,
-  buildPnpmPackage,
+  stdenv,
   nodejs_22,
+  pnpm,
   makeWrapper,
   esbuild,
   bun,
@@ -10,11 +11,21 @@
   pnpmDepsHash ? lib.fakeHash,
 }:
 
-buildPnpmPackage {
+stdenv.mkDerivation {
   pname = "openclaw";
-  inherit version src pnpmDepsHash;
+  inherit version src;
 
-  nativeBuildInputs = [ makeWrapper bun ];
+  nativeBuildInputs = [
+    nodejs_22
+    pnpm.configHook
+    makeWrapper
+    bun
+  ];
+
+  pnpmDeps = pnpm.fetchDeps {
+    inherit pname version src;
+    hash = pnpmDepsHash;
+  };
 
   # Provide esbuild from nixpkgs
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
@@ -34,7 +45,8 @@ buildPnpmPackage {
 
     mkdir -p $out/bin
     makeWrapper ${nodejs_22}/bin/node $out/bin/openclaw \
-      --add-flags "$out/lib/openclaw/dist/index.js" \
+      --add-flags "$out/lib/openclaw/openclaw.mjs" \
+      --add-flags "gateway" \
       --set NODE_ENV production
     runHook postInstall
   '';
