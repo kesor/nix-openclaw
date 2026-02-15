@@ -14,6 +14,7 @@ buildNpmPackage {
   inherit version src npmDepsHash;
 
   makeCacheWritable = true;
+  npmInstallFlags = [ "--omit=dev" "--omit=peer" ];
 
   nativeBuildInputs = [ makeWrapper ];
 
