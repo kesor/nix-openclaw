@@ -400,7 +400,7 @@ in
         Type       = "simple";
         User       = cfg.user;
         Group      = cfg.group;
-        ExecStart  = "${cfg.package}/bin/openclaw";
+        ExecStart  = "${cfg.package}/bin/openclaw --allow-unconfigured";
         Restart    = "always";
         RestartSec = 5;
         WorkingDirectory = cfg.dataDir;
