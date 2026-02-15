@@ -11,7 +11,7 @@
   pnpmDepsHash ? lib.fakeHash,
 }:
 
-stdenv.mkDerivation {
+stdenv.mkDerivation (finalAttrs: {
   pname = "openclaw";
   inherit version src;
 
@@ -23,7 +23,7 @@ stdenv.mkDerivation {
   ];
 
   pnpmDeps = pnpm.fetchDeps {
-    inherit pname version src;
+    inherit (finalAttrs) pname version src;
     hash = pnpmDepsHash;
   };
 
@@ -56,4 +56,4 @@ stdenv.mkDerivation {
     platforms = platforms.linux;
     mainProgram = "openclaw";
   };
-}
+});
