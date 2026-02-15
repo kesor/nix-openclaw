@@ -27,7 +27,6 @@ stdenv.mkDerivation (finalAttrs: {
     hash = pnpmDepsHash;
   };
 
-  # Provide esbuild from nixpkgs
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
   OPENCLAW_PREFER_PNPM = "1";
 
@@ -51,9 +50,9 @@ stdenv.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
 
-  meta = with lib; {
+  meta = {
     description = "OpenClaw – AI-powered application";
-    platforms = platforms.linux;
+    platforms = lib.platforms.linux;
     mainProgram = "openclaw";
   };
-});
+})
