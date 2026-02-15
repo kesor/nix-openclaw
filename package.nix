@@ -46,6 +46,10 @@ stdenv.mkDerivation (finalAttrs: {
     mkdir -p $out/bin
     makeWrapper ${nodejs_22}/bin/node $out/bin/openclaw \
       --add-flags "$out/lib/openclaw/openclaw.mjs" \
+      --set NODE_ENV production
+    
+    makeWrapper ${nodejs_22}/bin/node $out/bin/openclaw-gateway \
+      --add-flags "$out/lib/openclaw/openclaw.mjs" \
       --add-flags "gateway" \
       --set NODE_ENV production
     runHook postInstall
