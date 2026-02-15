@@ -12,6 +12,8 @@ buildNpmPackage {
   pname = "openclaw";
   inherit version src npmDepsHash;
 
+  makeCacheWritable = true;
+
   nativeBuildInputs = [ makeWrapper ];
 
   buildPhase = ''
