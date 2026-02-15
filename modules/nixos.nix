@@ -478,7 +478,7 @@ in
         ReadWritePaths   = [ cfg.dataDir ];
         NoNewPrivileges  = true;
       };
-      path = [ pkgs.git ];
+      path = [ pkgs.git pkgs.nodejs pkgs.nodePackages.npm ];
     };
 
     systemd.timers.openclaw-git-track = lib.mkIf cfg.gitTracking.enable {
