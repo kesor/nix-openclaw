@@ -616,12 +616,11 @@ in
       '')
 
       (pkgs.writeShellScriptBin "openclaw" ''
-        cd ${cfg.dataDir} && \
-          exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
+        exec sudo -u ${cfg.user} sh -c "cd ${cfg.dataDir} && ${cfg.package}/bin/openclaw \"\$@\"" -- "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-git" ''
-        cd ${cfg.dataDir} && exec ${pkgs.git}/bin/git "$@"
+        exec sudo -u ${cfg.user} sh -c "cd ${cfg.dataDir} && ${pkgs.git}/bin/git \"\$@\"" -- "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-backup-now" ''
