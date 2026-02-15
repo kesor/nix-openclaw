@@ -10,8 +10,13 @@
 #   • Convenience CLI wrappers
 #   • Optional read-only access to NixOS config for self-management proposals
 # ═══════════════════════════════════════════════════════════════════════════════
-flake:   # null when imported without flakes
-{ config, lib, pkgs, ... }:
+flake: # null when imported without flakes
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.services.openclaw;
@@ -19,9 +24,7 @@ let
   # Resolve the default package.  When consumed via the flake we can derive
   # the package automatically; otherwise the user must set `package`.
   defaultPackage =
-    if flake != null
-    then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw
-    else null;
+    if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
 
   # ── Script: git auto-commit ────────────────────────────────────────────────
   gitTrackScript = pkgs.writeShellScript "openclaw-git-track" ''
@@ -137,18 +140,36 @@ let
   '';
 
   # ── Generate models.json from Nix attrset ─────────────────────────────────
-  modelsJson = pkgs.writeText "openclaw-models.json" (builtins.toJSON {
-    models = lib.mapAttrs (_: m: lib.filterAttrs (_: v: v != null) {
-      inherit (m) type modelName endpoint maxTokens temperature;
-      inherit (m) isDefault extraConfig;
-    }) cfg.models;
-    defaultModel =
-      if cfg.defaultModel != null then cfg.defaultModel
-      else let d = lib.filterAttrs (_: m: m.isDefault) cfg.models;
-      in if d != { } then builtins.head (builtins.attrNames d)
-      else if cfg.models != { } then builtins.head (builtins.attrNames cfg.models)
-      else null;
-  });
+  modelsJson = pkgs.writeText "openclaw-models.json" (
+    builtins.toJSON {
+      models = lib.mapAttrs (
+        _: m:
+        lib.filterAttrs (_: v: v != null) {
+          inherit (m)
+            type
+            modelName
+            endpoint
+            maxTokens
+            temperature
+            ;
+          inherit (m) isDefault extraConfig;
+        }
+      ) cfg.models;
+      defaultModel =
+        if cfg.defaultModel != null then
+          cfg.defaultModel
+        else
+          let
+            d = lib.filterAttrs (_: m: m.isDefault) cfg.models;
+          in
+          if d != { } then
+            builtins.head (builtins.attrNames d)
+          else if cfg.models != { } then
+            builtins.head (builtins.attrNames cfg.models)
+          else
+            null;
+    }
+  );
 
   # ── Model sub-module type ──────────────────────────────────────────────────
   modelOpts = lib.types.submodule {
@@ -212,8 +233,14 @@ in
     };
 
     # ── Identity ─────────────────────────────────────────────────────────────
-    user = lib.mkOption  { type = lib.types.str; default = "openclaw"; };
-    group = lib.mkOption { type = lib.types.str; default = "openclaw"; };
+    user = lib.mkOption {
+      type = lib.types.str;
+      default = "openclaw";
+    };
+    group = lib.mkOption {
+      type = lib.types.str;
+      default = "openclaw";
+    };
 
     # ── Paths ────────────────────────────────────────────────────────────────
     dataDir = lib.mkOption {
@@ -223,8 +250,14 @@ in
     };
 
     # ── Network ──────────────────────────────────────────────────────────────
-    host = lib.mkOption { type = lib.types.str;  default = "127.0.0.1"; };
-    port = lib.mkOption { type = lib.types.port; default = 3000; };
+    host = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.1";
+    };
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 3000;
+    };
 
     # ── Secrets ──────────────────────────────────────────────────────────────
     environmentFiles = lib.mkOption {
@@ -272,7 +305,10 @@ in
 
     # ── Git tracking ─────────────────────────────────────────────────────────
     gitTracking = {
-      enable = lib.mkOption { type = lib.types.bool; default = true; };
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+      };
       interval = lib.mkOption {
         type = lib.types.str;
         default = "*:0/5";
@@ -301,8 +337,14 @@ in
         default = true;
         description = "Enable strict systemd sandboxing.  Disable for debugging.";
       };
-      extraReadPaths  = lib.mkOption { type = lib.types.listOf lib.types.str; default = [ ]; };
-      extraWritePaths = lib.mkOption { type = lib.types.listOf lib.types.str; default = [ ]; };
+      extraReadPaths = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+      };
+      extraWritePaths = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+      };
     };
 
     # ── NixOS self-management ────────────────────────────────────────────────
@@ -339,14 +381,20 @@ in
       group = cfg.group;
       home = cfg.dataDir;
       description = "OpenClaw service account";
-      extraGroups = lib.optionals cfg.rocm.enable [ "video" "render" ];
+      extraGroups = lib.optionals cfg.rocm.enable [
+        "video"
+        "render"
+      ];
     };
     users.groups.${cfg.group} = { };
 
     # ── Directories ──────────────────────────────────────────────────────────
     systemd.tmpfiles.rules =
-      let o = "${cfg.user}"; g = "${cfg.group}";
-      in [
+      let
+        o = "${cfg.user}";
+        g = "${cfg.group}";
+      in
+      [
         "d ${cfg.dataDir}            0750 ${o} ${g} -"
         "d ${cfg.dataDir}/data       0750 ${o} ${g} -"
         "d ${cfg.dataDir}/config     0750 ${o} ${g} -"
@@ -354,7 +402,8 @@ in
         "d ${cfg.dataDir}/cache      0750 ${o} ${g} -"
         "d ${cfg.dataDir}/staging    0750 ${o} ${g} -"
         "d ${cfg.dataDir}/secrets    0700 ${o} ${g} -"
-      ] ++ lib.optionals (cfg.nixosConfigDir != null) [
+      ]
+      ++ lib.optionals (cfg.nixosConfigDir != null) [
         "d ${cfg.dataDir}/nixos-proposals 0750 ${o} ${g} -"
       ];
 
@@ -370,92 +419,105 @@ in
     # ── Main service ─────────────────────────────────────────────────────────
     systemd.services.openclaw = {
       description = "OpenClaw AI Application";
-      after  = [ "network-online.target" ];
-      wants  = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {
-        NODE_ENV                = "production";
-        OPENCLAW_HOST           = cfg.host;
-        OPENCLAW_PORT           = toString cfg.port;
-        OPENCLAW_DATA_DIR       = "${cfg.dataDir}/data";
-        OPENCLAW_CONFIG_DIR     = "${cfg.dataDir}/config";
-        OPENCLAW_LOG_DIR        = "${cfg.dataDir}/logs";
-        OPENCLAW_CACHE_DIR      = "${cfg.dataDir}/cache";
-        OPENCLAW_STAGING_DIR    = "${cfg.dataDir}/staging";
-        OPENCLAW_MODELS_CONFIG  = toString modelsJson;
-        HOME                    = cfg.dataDir;
+        NODE_ENV = "production";
+        OPENCLAW_HOST = cfg.host;
+        OPENCLAW_PORT = toString cfg.port;
+        OPENCLAW_DATA_DIR = "${cfg.dataDir}/data";
+        OPENCLAW_CONFIG_DIR = "${cfg.dataDir}/config";
+        OPENCLAW_LOG_DIR = "${cfg.dataDir}/logs";
+        OPENCLAW_CACHE_DIR = "${cfg.dataDir}/cache";
+        OPENCLAW_STAGING_DIR = "${cfg.dataDir}/staging";
+        OPENCLAW_MODELS_CONFIG = toString modelsJson;
+        HOME = cfg.dataDir;
       }
       // lib.optionalAttrs cfg.rocm.enable {
         HSA_OVERRIDE_GFX_VERSION = cfg.rocm.gfxVersion;
-        HIP_VISIBLE_DEVICES      = lib.concatStringsSep "," cfg.rocm.deviceIds;
+        HIP_VISIBLE_DEVICES = lib.concatStringsSep "," cfg.rocm.deviceIds;
       }
       // lib.optionalAttrs (cfg.nixosConfigDir != null) {
-        OPENCLAW_NIXOS_CONFIG_DIR    = cfg.nixosConfigDir;
+        OPENCLAW_NIXOS_CONFIG_DIR = cfg.nixosConfigDir;
         OPENCLAW_NIXOS_PROPOSALS_DIR = "${cfg.dataDir}/nixos-proposals";
       }
       // cfg.extraEnvironment;
 
       serviceConfig = {
-        Type       = "simple";
-        User       = cfg.user;
-        Group      = cfg.group;
-        ExecStart  = "${cfg.package}/bin/openclaw --allow-unconfigured";
-        Restart    = "always";
+        Type = "simple";
+        User = cfg.user;
+        Group = cfg.group;
+        ExecStart = "${cfg.package}/bin/openclaw";
+        Restart = "always";
         RestartSec = 5;
         WorkingDirectory = cfg.dataDir;
 
         EnvironmentFile = cfg.environmentFiles;
 
         # ── Resource limits ──────────────────────────────────────────────
-        LimitNOFILE  = 65536;
-        MemoryMax    = "8G";
-        CPUQuota     = "400%";
+        LimitNOFILE = 65536;
+        MemoryMax = "8G";
+        CPUQuota = "400%";
 
         # ── Logging ──────────────────────────────────────────────────────
-        StandardOutput  = "journal";
-        StandardError   = "journal";
+        StandardOutput = "journal";
+        StandardError = "journal";
         SyslogIdentifier = "openclaw";
       }
       # ── Security hardening (conditional) ─────────────────────────────────
       // lib.optionalAttrs cfg.sandbox.enable {
-        ProtectSystem           = "strict";
-        ProtectHome             = true;
-        PrivateTmp              = true;
-        ProtectKernelTunables   = true;
-        ProtectKernelModules    = true;
-        ProtectKernelLogs       = true;
-        ProtectControlGroups    = true;
-        ProtectClock            = true;
-        ProtectHostname         = true;
-        NoNewPrivileges         = true;
-        LockPersonality         = true;
-        RestrictRealtime        = true;
-        RestrictSUIDSGID        = true;
-        RemoveIPC               = true;
-        MemoryDenyWriteExecute  = false;  # Node.js V8 JIT requires W|X
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectKernelLogs = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        NoNewPrivileges = true;
+        LockPersonality = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        RemoveIPC = true;
+        MemoryDenyWriteExecute = false; # Node.js V8 JIT requires W|X
 
-        CapabilityBoundingSet   = "";
-        AmbientCapabilities     = "";
+        CapabilityBoundingSet = "";
+        AmbientCapabilities = "";
 
-        PrivateUsers            = !cfg.rocm.enable;
-        PrivateDevices          = !cfg.rocm.enable;
+        PrivateUsers = !cfg.rocm.enable;
+        PrivateDevices = !cfg.rocm.enable;
 
-        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
-        SystemCallFilter        = [ "@system-service" "~@mount" "~@reboot" "~@swap" ];
+        RestrictAddressFamilies = [
+          "AF_INET"
+          "AF_INET6"
+          "AF_UNIX"
+          "AF_NETLINK"
+        ];
+        SystemCallFilter = [
+          "@system-service"
+          "~@mount"
+          "~@reboot"
+          "~@swap"
+        ];
         SystemCallArchitectures = "native";
 
         ReadWritePaths = [
           cfg.dataDir
-        ] ++ cfg.sandbox.extraWritePaths;
+        ]
+        ++ cfg.sandbox.extraWritePaths;
 
-        ReadOnlyPaths = lib.optionals (cfg.nixosConfigDir != null) [
-          cfg.nixosConfigDir
-        ] ++ cfg.sandbox.extraReadPaths;
+        ReadOnlyPaths =
+          lib.optionals (cfg.nixosConfigDir != null) [
+            cfg.nixosConfigDir
+          ]
+          ++ cfg.sandbox.extraReadPaths;
       }
       // lib.optionalAttrs (cfg.sandbox.enable && cfg.rocm.enable) {
         DevicePolicy = "auto";
-        DeviceAllow  = [
+        DeviceAllow = [
           "/dev/kfd rw"
           "/dev/dri/card0 rw"
           "/dev/dri/renderD128 rw"
@@ -467,18 +529,22 @@ in
     systemd.services.openclaw-git-track = lib.mkIf cfg.gitTracking.enable {
       description = "Auto-commit OpenClaw data changes";
       serviceConfig = {
-        Type    = "oneshot";
-        User    = cfg.user;
-        Group   = cfg.group;
+        Type = "oneshot";
+        User = cfg.user;
+        Group = cfg.group;
         ExecStart = gitTrackScript;
-        ProtectSystem    = "strict";
-        ProtectHome      = true;
-        PrivateTmp       = true;
-        PrivateDevices   = true;
-        ReadWritePaths   = [ cfg.dataDir ];
-        NoNewPrivileges  = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ReadWritePaths = [ cfg.dataDir ];
+        NoNewPrivileges = true;
       };
-      path = [ pkgs.git pkgs.nodejs pkgs.nodePackages.npm ];
+      path = [
+        pkgs.git
+        pkgs.nodejs
+        pkgs.nodePackages.npm
+      ];
     };
 
     systemd.timers.openclaw-git-track = lib.mkIf cfg.gitTracking.enable {
@@ -496,20 +562,25 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       serviceConfig = {
-        Type    = "oneshot";
-        User    = cfg.user;
-        Group   = cfg.group;
+        Type = "oneshot";
+        User = cfg.user;
+        Group = cfg.group;
         ExecStart = r2BackupScript;
-        EnvironmentFile  = cfg.environmentFiles;
-        ProtectSystem    = "strict";
-        ProtectHome      = true;
-        PrivateTmp       = true;
-        PrivateDevices   = true;
-        ReadOnlyPaths    = [ cfg.dataDir ];
-        ReadWritePaths   = [ "/tmp" ];
-        NoNewPrivileges  = true;
+        EnvironmentFile = cfg.environmentFiles;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ReadOnlyPaths = [ cfg.dataDir ];
+        ReadWritePaths = [ "/tmp" ];
+        NoNewPrivileges = true;
       };
-      path = [ pkgs.rclone pkgs.gnutar pkgs.zstd pkgs.git ];
+      path = [
+        pkgs.rclone
+        pkgs.gnutar
+        pkgs.zstd
+        pkgs.git
+      ];
     };
 
     systemd.timers.openclaw-backup = lib.mkIf cfg.backup.enable {
@@ -545,7 +616,8 @@ in
       '')
 
       (pkgs.writeShellScriptBin "openclaw" ''
-        exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
+        cd ${cfg.dataDir} && \
+          exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-git" ''
