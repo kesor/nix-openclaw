@@ -1,29 +1,29 @@
 {
   lib,
-  buildNpmPackage,
+  buildPnpmPackage,
   nodejs_22,
   makeWrapper,
   esbuild,
+  bun,
   src,
   version ? "0-unstable",
-  npmDepsHash ? lib.fakeHash,
+  pnpmDepsHash ? lib.fakeHash,
 }:
 
-buildNpmPackage {
+buildPnpmPackage {
   pname = "openclaw";
-  inherit version src npmDepsHash;
+  inherit version src pnpmDepsHash;
 
-  makeCacheWritable = true;
-  npmInstallFlags = [ "--omit=dev" "--omit=peer" ];
+  nativeBuildInputs = [ makeWrapper bun ];
 
-  nativeBuildInputs = [ makeWrapper ];
-
-  # Provide esbuild from nixpkgs instead of npm
+  # Provide esbuild from nixpkgs
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
+  OPENCLAW_PREFER_PNPM = "1";
 
   buildPhase = ''
     runHook preBuild
-    npm run build || true
+    pnpm build
+    pnpm ui:build
     runHook postBuild
   '';
 
