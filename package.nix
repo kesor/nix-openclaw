@@ -25,6 +25,7 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = pnpm.fetchDeps {
     inherit (finalAttrs) pname version src;
     hash = pnpmDepsHash;
+    fetcherVersion = "10";
   };
 
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
