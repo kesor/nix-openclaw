@@ -420,7 +420,7 @@ in
     # Source environment files in openclaw user's bash profile
     system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
-      ${lib.concatMapStringsSep "\n" (f: "[ -f ${f} ] && source ${f}") cfg.environmentFiles}
+      ${lib.concatMapStringsSep "\n" (f: "[ -f ${f} ] && set -a && source ${f} && set +a") cfg.environmentFiles}
       EOF
       cat > ${cfg.dataDir}/.bash_profile << 'EOF'
       [ -f ~/.bashrc ] && source ~/.bashrc
