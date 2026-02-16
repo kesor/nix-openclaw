@@ -645,10 +645,6 @@ in
         exec journalctl -u openclaw.service -f "$@"
       '')
 
-      (pkgs.writeShellScriptBin "openclaw" ''
-        exec sudo -u ${cfg.user} sh -c "cd ${cfg.dataDir} && ${cfg.package}/bin/openclaw \"\$@\"" -- "$@"
-      '')
-
       (pkgs.writeShellScriptBin "openclaw-git" ''
         exec sudo -u ${cfg.user} sh -c "cd ${cfg.dataDir} && ${pkgs.git}/bin/git \"\$@\"" -- "$@"
       '')
@@ -667,11 +663,14 @@ in
       '')
 
       (pkgs.writeShellScriptBin "openclaw-shell" ''
-        exec sudo -u ${cfg.user} -i "$@"
+        exec sudo su - ${cfg.user} "$@"
       '')
 
       pkgs.git
       pkgs.jq
+    ]
+    ++ lib.optionals cfg.clawhub.enable [
+      (pkgs.callPackage ../clawhub.nix { })
     ];
   };
 }
