@@ -614,6 +614,8 @@ in
 
     # ── CLI convenience wrappers ─────────────────────────────────────────────
     environment.systemPackages = [
+      cfg.package  # The actual openclaw CLI
+
       (pkgs.writeShellScriptBin "openclaw-status" ''
         set -euo pipefail
         echo "══ service ══"
