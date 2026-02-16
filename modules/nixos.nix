@@ -411,7 +411,6 @@ in
         "video"
         "render"
       ];
-      packages = lib.optionals cfg.shell.enable cfg.shell.extraPackages;
     };
     users.groups.${cfg.group} = { };
 
@@ -498,6 +497,10 @@ in
         StandardOutput = "journal";
         StandardError = "journal";
         SyslogIdentifier = "openclaw";
+      }
+      # ── Additional PATH for shell access ─────────────────────────────────
+      // lib.optionalAttrs cfg.shell.enable {
+        path = cfg.shell.extraPackages;
       }
       # ── Security hardening (conditional) ─────────────────────────────────
       // lib.optionalAttrs cfg.sandbox.enable {
