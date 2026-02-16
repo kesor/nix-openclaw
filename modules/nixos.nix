@@ -136,7 +136,7 @@ let
 
     ${pkgs.gnutar}/bin/tar --extract --zstd --file="$TMP" --directory="${cfg.dataDir}"
     rm -f "$TMP"
-    echo "✓ restored from $FILE — restart openclaw.service to apply"
+    echo "✓ restored from $FILE — restart openclaw-gateway.service to apply"
   '';
 
   # ── Generate models.json from Nix attrset ─────────────────────────────────
@@ -447,23 +447,17 @@ in
     };
 
     # ── Main service ─────────────────────────────────────────────────────────
-    systemd.services.openclaw = {
-      description = "OpenClaw AI Application";
+    systemd.services.openclaw-gateway = {
+      description = "OpenClaw AI Gateway";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {
         NODE_ENV = "production";
-        OPENCLAW_HOST = cfg.host;
-        OPENCLAW_PORT = toString cfg.port;
-        OPENCLAW_DATA_DIR = "${cfg.dataDir}/data";
-        OPENCLAW_CONFIG_DIR = "${cfg.dataDir}/config";
-        OPENCLAW_LOG_DIR = "${cfg.dataDir}/logs";
-        OPENCLAW_CACHE_DIR = "${cfg.dataDir}/cache";
-        OPENCLAW_STAGING_DIR = "${cfg.dataDir}/staging";
-        OPENCLAW_MODELS_CONFIG = toString modelsJson;
+        OPENCLAW_STATE_DIR = cfg.dataDir;
         OPENCLAW_NIX_MODE = "1";
+        OPENCLAW_GATEWAY_PORT = toString cfg.port;
         HOME = cfg.dataDir;
       }
       // lib.optionalAttrs cfg.rocm.enable {
@@ -627,10 +621,10 @@ in
       (pkgs.writeShellScriptBin "openclaw-status" ''
         set -euo pipefail
         echo "══ service ══"
-        systemctl status openclaw.service --no-pager 2>&1 || true
+        systemctl status openclaw-gateway.service --no-pager 2>&1 || true
         echo ""
         echo "══ last 25 log lines ══"
-        journalctl -u openclaw.service -n 25 --no-pager 2>&1 || true
+        journalctl -u openclaw-gateway.service -n 25 --no-pager 2>&1 || true
         echo ""
         echo "══ disk usage ══"
         du -sh ${cfg.dataDir}/*/ 2>/dev/null || echo "(empty)"
@@ -642,7 +636,7 @@ in
       '')
 
       (pkgs.writeShellScriptBin "openclaw-logs" ''
-        exec journalctl -u openclaw.service -f "$@"
+        exec journalctl -u openclaw-gateway.service -f "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-git" ''
