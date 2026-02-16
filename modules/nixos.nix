@@ -411,8 +411,19 @@ in
         "video"
         "render"
       ];
+      packages = lib.optionals cfg.shell.enable (
+        cfg.shell.extraPackages ++ [ cfg.package ]
+      );
     };
     users.groups.${cfg.group} = { };
+
+    # Source environment files in openclaw user's bash profile
+    system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
+      cat > ${cfg.dataDir}/.bashrc << 'EOF'
+      ${lib.concatMapStringsSep "\n" (f: "[ -f ${f} ] && source ${f}") cfg.environmentFiles}
+      EOF
+      chown ${cfg.user}:${cfg.group} ${cfg.dataDir}/.bashrc
+    '';
 
     # ── Directories ──────────────────────────────────────────────────────────
     systemd.tmpfiles.rules =
@@ -614,7 +625,12 @@ in
 
     # ── CLI convenience wrappers ─────────────────────────────────────────────
     environment.systemPackages = [
-      cfg.package  # The actual openclaw CLI
+      (pkgs.writeShellScriptBin "openclaw" ''
+        set -a
+        ${lib.concatMapStringsSep "\n" (f: "source ${f} 2>/dev/null || true") cfg.environmentFiles}
+        set +a
+        exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
+      '')
 
       (pkgs.writeShellScriptBin "openclaw-status" ''
         set -euo pipefail
