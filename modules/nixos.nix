@@ -464,7 +464,7 @@ in
         OPENCLAW_CACHE_DIR = "${cfg.dataDir}/cache";
         OPENCLAW_STAGING_DIR = "${cfg.dataDir}/staging";
         OPENCLAW_MODELS_CONFIG = toString modelsJson;
-        OPENCLAW_NIX_MODE = 1;
+        OPENCLAW_NIX_MODE = "1";
         HOME = cfg.dataDir;
       }
       // lib.optionalAttrs cfg.rocm.enable {
