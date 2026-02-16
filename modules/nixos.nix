@@ -356,6 +356,31 @@ in
         directory is created for it to suggest NixOS changes.
       '';
     };
+
+    # ── ClawHub integration ──────────────────────────────────────────────────
+    clawhub = {
+      enable = lib.mkEnableOption "ClawHub skill registry integration (via npx)";
+    };
+
+    # ── Shell access ─────────────────────────────────────────────────────────
+    shell = {
+      enable = lib.mkEnableOption "interactive shell access for openclaw user";
+      extraPackages = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = with pkgs; [
+          bash
+          coreutils
+          findutils
+          gnugrep
+          gnused
+          git
+          curl
+          jq
+          nodejs
+        ];
+        description = "Additional packages available in openclaw user's PATH.";
+      };
+    };
   };
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -381,10 +406,12 @@ in
       group = cfg.group;
       home = cfg.dataDir;
       description = "OpenClaw service account";
+      shell = if cfg.shell.enable then pkgs.bash else pkgs.shadow;
       extraGroups = lib.optionals cfg.rocm.enable [
         "video"
         "render"
       ];
+      packages = lib.optionals cfg.shell.enable cfg.shell.extraPackages;
     };
     users.groups.${cfg.group} = { };
 
@@ -405,6 +432,10 @@ in
       ]
       ++ lib.optionals (cfg.nixosConfigDir != null) [
         "d ${cfg.dataDir}/nixos-proposals 0750 ${o} ${g} -"
+      ]
+      ++ lib.optionals cfg.clawhub.enable [
+        "d ${cfg.dataDir}/cache/clawhub 0750 ${o} ${g} -"
+        "d ${cfg.dataDir}/skills 0750 ${o} ${g} -"
       ];
 
     # ── ROCm hardware ────────────────────────────────────────────────────────
@@ -433,6 +464,7 @@ in
         OPENCLAW_CACHE_DIR = "${cfg.dataDir}/cache";
         OPENCLAW_STAGING_DIR = "${cfg.dataDir}/staging";
         OPENCLAW_MODELS_CONFIG = toString modelsJson;
+        OPENCLAW_NIX_MODE = 1;
         HOME = cfg.dataDir;
       }
       // lib.optionalAttrs cfg.rocm.enable {
@@ -443,6 +475,7 @@ in
         OPENCLAW_NIXOS_CONFIG_DIR = cfg.nixosConfigDir;
         OPENCLAW_NIXOS_PROPOSALS_DIR = "${cfg.dataDir}/nixos-proposals";
       }
+      // lib.optionalAttrs cfg.clawhub.enable { CLAWHUB_CACHE_DIR = "${cfg.dataDir}/cache/clawhub"; }
       // cfg.extraEnvironment;
 
       serviceConfig = {
@@ -504,16 +537,10 @@ in
         ];
         SystemCallArchitectures = "native";
 
-        ReadWritePaths = [
-          cfg.dataDir
-        ]
-        ++ cfg.sandbox.extraWritePaths;
+        ReadWritePaths = [ cfg.dataDir ] ++ cfg.sandbox.extraWritePaths;
 
         ReadOnlyPaths =
-          lib.optionals (cfg.nixosConfigDir != null) [
-            cfg.nixosConfigDir
-          ]
-          ++ cfg.sandbox.extraReadPaths;
+          lib.optionals (cfg.nixosConfigDir != null) [ cfg.nixosConfigDir ] ++ cfg.sandbox.extraReadPaths;
       }
       // lib.optionalAttrs (cfg.sandbox.enable && cfg.rocm.enable) {
         DevicePolicy = "auto";
@@ -636,9 +663,12 @@ in
         exec ${r2RestoreScript} "$@"
       '')
 
+      (pkgs.writeShellScriptBin "openclaw-shell" ''
+        exec sudo -u ${cfg.user} -i "$@"
+      '')
+
       pkgs.git
       pkgs.jq
     ];
   };
 }
-
