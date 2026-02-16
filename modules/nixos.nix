@@ -422,7 +422,10 @@ in
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
       ${lib.concatMapStringsSep "\n" (f: "[ -f ${f} ] && source ${f}") cfg.environmentFiles}
       EOF
-      chown ${cfg.user}:${cfg.group} ${cfg.dataDir}/.bashrc
+      cat > ${cfg.dataDir}/.bash_profile << 'EOF'
+      [ -f ~/.bashrc ] && source ~/.bashrc
+      EOF
+      chown ${cfg.user}:${cfg.group} ${cfg.dataDir}/.bashrc ${cfg.dataDir}/.bash_profile
     '';
 
     # ── Directories ──────────────────────────────────────────────────────────
