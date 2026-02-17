@@ -377,6 +377,7 @@ in
           curl
           jq
           nodejs
+          python3
         ];
         description = "Additional packages available in openclaw user's PATH.";
       };
