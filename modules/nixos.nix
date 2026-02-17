@@ -406,6 +406,11 @@ in
         default = 9222;
         description = "Chrome DevTools Protocol port";
       };
+      extraArgs = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        description = "Additional command-line arguments for Chrome/Chromium";
+      };
     };
   };
 
@@ -791,7 +796,7 @@ in
       '';
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.browser.package}/bin/${cfg.browser.package.meta.mainProgram or "chromium"} --headless --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension";
+        ExecStart = "${cfg.browser.package}/bin/${cfg.browser.package.meta.mainProgram or "chromium"} --headless --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
         Restart = "always";
         RestartSec = "5s";
       };
