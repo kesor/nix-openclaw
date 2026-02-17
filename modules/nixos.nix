@@ -674,7 +674,7 @@ in
       '')
 
       (pkgs.writeShellScriptBin "openclaw-shell" ''
-        exec sudo su - ${cfg.user} "$@"
+        exec sudo machinectl shell ${cfg.user}@
       '')
 
       pkgs.git
