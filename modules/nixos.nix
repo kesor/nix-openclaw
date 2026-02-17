@@ -715,31 +715,67 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "default.target" ];
-      inherit (config.systemd.services.openclaw-gateway) environment;
-      serviceConfig = config.systemd.services.openclaw-gateway.serviceConfig // {
-        User = lib.mkForce null;
-        Group = lib.mkForce null;
+      environment = {
+        NODE_ENV = "production";
+        OPENCLAW_STATE_DIR = cfg.dataDir;
+        OPENCLAW_NIX_MODE = "1";
+        OPENCLAW_GATEWAY_PORT = toString cfg.port;
+        HOME = cfg.dataDir;
+      }
+      // lib.optionalAttrs cfg.rocm.enable {
+        HSA_OVERRIDE_GFX_VERSION = cfg.rocm.gfxVersion;
+        HIP_VISIBLE_DEVICES = lib.concatStringsSep "," cfg.rocm.deviceIds;
+      }
+      // lib.optionalAttrs (cfg.nixosConfigDir != null) {
+        OPENCLAW_NIXOS_CONFIG_DIR = cfg.nixosConfigDir;
+        OPENCLAW_NIXOS_PROPOSALS_DIR = "${cfg.dataDir}/nixos-proposals";
+      }
+      // lib.optionalAttrs cfg.clawhub.enable { CLAWHUB_CACHE_DIR = "${cfg.dataDir}/cache/clawhub"; }
+      // cfg.extraEnvironment;
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${cfg.package}/bin/openclaw-gateway";
+        Restart = "always";
+        RestartSec = 5;
+        WorkingDirectory = cfg.dataDir;
+        EnvironmentFile = cfg.environmentFiles;
+        LimitNOFILE = 65536;
+        MemoryMax = "8G";
+        CPUQuota = "400%";
+        StandardOutput = "journal";
+        StandardError = "journal";
+        SyslogIdentifier = "openclaw";
       };
     };
 
     systemd.user.services.openclaw-git-track = lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable) {
       description = "Auto-commit OpenClaw data changes";
-      serviceConfig = config.systemd.services.openclaw-git-track.serviceConfig // {
-        User = lib.mkForce null;
-        Group = lib.mkForce null;
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = gitTrackScript;
       };
-      inherit (config.systemd.services.openclaw-git-track) path;
+      path = [
+        pkgs.git
+        pkgs.nodejs
+        pkgs.nodePackages.npm
+      ];
     };
 
     systemd.user.services.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
       description = "Backup OpenClaw data to Cloudflare R2";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      serviceConfig = config.systemd.services.openclaw-backup.serviceConfig // {
-        User = lib.mkForce null;
-        Group = lib.mkForce null;
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = r2BackupScript;
+        EnvironmentFile = cfg.environmentFiles;
       };
-      inherit (config.systemd.services.openclaw-backup) path;
+      path = [
+        pkgs.rclone
+        pkgs.gnutar
+        pkgs.zstd
+        pkgs.git
+      ];
     };
 
     systemd.user.services.openclaw-chrome = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable) {
@@ -762,13 +798,21 @@ in
 
     systemd.user.timers.openclaw-git-track = lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable) {
       description = "Auto-commit OpenClaw data changes";
-      inherit (config.systemd.timers.openclaw-git-track) timerConfig;
+      timerConfig = {
+        OnCalendar = cfg.gitTracking.interval;
+        Persistent = true;
+        RandomizedDelaySec = 30;
+      };
       wantedBy = [ "timers.target" ];
     };
 
     systemd.user.timers.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
       description = "Backup OpenClaw data to Cloudflare R2";
-      inherit (config.systemd.timers.openclaw-backup) timerConfig;
+      timerConfig = {
+        OnCalendar = cfg.backup.interval;
+        Persistent = true;
+        RandomizedDelaySec = 300;
+      };
       wantedBy = [ "timers.target" ];
     };
 
