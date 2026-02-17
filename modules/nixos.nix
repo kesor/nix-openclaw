@@ -381,6 +381,31 @@ in
         description = "Additional packages available in openclaw user's PATH.";
       };
     };
+
+    # ── User services ────────────────────────────────────────────────────────
+    runAsUserServices = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Run OpenClaw services as user services instead of system services.
+        Enables lingering for the openclaw user.
+      '';
+    };
+
+    # ── Headless browser ─────────────────────────────────────────────────────
+    browser = {
+      enable = lib.mkEnableOption "headless Chrome/Chromium for browser automation";
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.chromium;
+        description = "Browser package to use (chromium or google-chrome)";
+      };
+      debugPort = lib.mkOption {
+        type = lib.types.port;
+        default = 9222;
+        description = "Chrome DevTools Protocol port";
+      };
+    };
   };
 
   # ══════════════════════════════════════════════════════════════════════════════
@@ -461,7 +486,7 @@ in
     };
 
     # ── Main service ─────────────────────────────────────────────────────────
-    systemd.services.openclaw-gateway = {
+    systemd.services.openclaw-gateway = lib.mkIf (!cfg.runAsUserServices) {
       description = "OpenClaw AI Gateway";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
@@ -560,7 +585,7 @@ in
     };
 
     # ── Git auto-tracking ────────────────────────────────────────────────────
-    systemd.services.openclaw-git-track = lib.mkIf cfg.gitTracking.enable {
+    systemd.services.openclaw-git-track = lib.mkIf (!cfg.runAsUserServices && cfg.gitTracking.enable) {
       description = "Auto-commit OpenClaw data changes";
       serviceConfig = {
         Type = "oneshot";
@@ -581,7 +606,7 @@ in
       ];
     };
 
-    systemd.timers.openclaw-git-track = lib.mkIf cfg.gitTracking.enable {
+    systemd.timers.openclaw-git-track = lib.mkIf (!cfg.runAsUserServices && cfg.gitTracking.enable) {
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = cfg.gitTracking.interval;
@@ -591,7 +616,7 @@ in
     };
 
     # ── R2 backup ────────────────────────────────────────────────────────────
-    systemd.services.openclaw-backup = lib.mkIf cfg.backup.enable {
+    systemd.services.openclaw-backup = lib.mkIf (!cfg.runAsUserServices && cfg.backup.enable) {
       description = "Backup OpenClaw data to Cloudflare R2";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
@@ -617,7 +642,7 @@ in
       ];
     };
 
-    systemd.timers.openclaw-backup = lib.mkIf cfg.backup.enable {
+    systemd.timers.openclaw-backup = lib.mkIf (!cfg.runAsUserServices && cfg.backup.enable) {
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = cfg.backup.interval;
@@ -683,5 +708,75 @@ in
     ++ lib.optionals cfg.clawhub.enable [
       (pkgs.callPackage ../clawhub.nix { })
     ];
+
+    # ── User services conversion ─────────────────────────────────────────────
+    systemd.user.services.openclaw-gateway = lib.mkIf cfg.runAsUserServices {
+      description = "OpenClaw AI Gateway";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "default.target" ];
+      inherit (config.systemd.services.openclaw-gateway) environment;
+      serviceConfig = config.systemd.services.openclaw-gateway.serviceConfig // {
+        User = lib.mkForce null;
+        Group = lib.mkForce null;
+      };
+    };
+
+    systemd.user.services.openclaw-git-track = lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable) {
+      description = "Auto-commit OpenClaw data changes";
+      serviceConfig = config.systemd.services.openclaw-git-track.serviceConfig // {
+        User = lib.mkForce null;
+        Group = lib.mkForce null;
+      };
+      inherit (config.systemd.services.openclaw-git-track) path;
+    };
+
+    systemd.user.services.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
+      description = "Backup OpenClaw data to Cloudflare R2";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = config.systemd.services.openclaw-backup.serviceConfig // {
+        User = lib.mkForce null;
+        Group = lib.mkForce null;
+      };
+      inherit (config.systemd.services.openclaw-backup) path;
+    };
+
+    systemd.user.services.openclaw-chrome = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable) {
+      description = "Headless Chrome for OpenClaw browser automation";
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "default.target" ];
+      preStart = ''
+        mkdir -p ${cfg.dataDir}/.chrome-extension
+        cp -r ${cfg.package}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
+        chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}/.chrome-extension
+      '';
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${cfg.browser.package}/bin/${cfg.browser.package.meta.mainProgram or "chromium"} --headless --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension";
+        Restart = "always";
+        RestartSec = "5s";
+      };
+    };
+
+    systemd.user.timers.openclaw-git-track = lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable) {
+      description = "Auto-commit OpenClaw data changes";
+      inherit (config.systemd.timers.openclaw-git-track) timerConfig;
+      wantedBy = [ "timers.target" ];
+    };
+
+    systemd.user.timers.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
+      description = "Backup OpenClaw data to Cloudflare R2";
+      inherit (config.systemd.timers.openclaw-backup) timerConfig;
+      wantedBy = [ "timers.target" ];
+    };
+
+    # Enable lingering for openclaw user when using user services
+    system.activationScripts.openclaw-linger = lib.mkIf cfg.runAsUserServices (
+      lib.stringAfter [ "users" ] ''
+        ${pkgs.systemd}/bin/loginctl enable-linger ${cfg.user} || true
+      ''
+    );
   };
 }
