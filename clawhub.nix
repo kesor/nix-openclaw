@@ -9,7 +9,10 @@ stdenv.mkDerivation rec {
   pname = "clawhub";
   version = "0.7.0";
 
-  nativeBuildInputs = [ nodejs cacert ];
+  nativeBuildInputs = [
+    nodejs
+    cacert
+  ];
 
   dontUnpack = true;
 

@@ -44,18 +44,14 @@
     {
       # ── Overlay ────────────────────────────────────────────────────────────────
       overlays.default = final: _prev: {
-        openclaw = final.callPackage ./package.nix {
-          src = openclaw-src;
-        };
+        openclaw = final.callPackage ./package.nix { src = openclaw-src; };
       };
 
       # ── Packages ───────────────────────────────────────────────────────────────
       packages = forAllSystems (
         { pkgs, ... }:
         rec {
-          openclaw = pkgs.callPackage ./package.nix {
-            src = openclaw-src;
-          };
+          openclaw = pkgs.callPackage ./package.nix { src = openclaw-src; };
           default = openclaw;
         }
       );

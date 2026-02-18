@@ -11,7 +11,7 @@
     environmentFiles = [ "/var/lib/openclaw/secrets/env" ];
 
     models.claude = {
-      type      = "anthropic";
+      type = "anthropic";
       modelName = "claude-sonnet-4-20250514";
       isDefault = true;
     };

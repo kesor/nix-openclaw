@@ -16,13 +16,15 @@
   nixosModule = import ./modules/nixos.nix null;
   homeManagerModule = import ./modules/home-manager.nix null;
 
-  package = pkgs: pkgs.callPackage ./package.nix {
-    src = throw ''
-      nix-openclaw: you must supply an OpenClaw source tree.
-      Either use the flake interface (which pins the source automatically)
-      or pass `src` when calling the package:
+  package =
+    pkgs:
+    pkgs.callPackage ./package.nix {
+      src = throw ''
+        nix-openclaw: you must supply an OpenClaw source tree.
+        Either use the flake interface (which pins the source automatically)
+        or pass `src` when calling the package:
 
-        nix-openclaw.package pkgs.override { src = ./path/to/openclaw; }
-    '';
-  };
+          nix-openclaw.package pkgs.override { src = ./path/to/openclaw; }
+      '';
+    };
 }

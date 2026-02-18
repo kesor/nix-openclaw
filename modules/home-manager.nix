@@ -14,27 +14,48 @@
 #     (you must configure GPU access at the system level separately)
 # ═══════════════════════════════════════════════════════════════════════════════
 flake:
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.services.openclaw;
 
   defaultPackage =
-    if flake != null
-    then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw
-    else null;
+    if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
 
   # Model sub-module (same definition as the NixOS module)
   modelOpts = lib.types.submodule {
     options = {
       type = lib.mkOption {
-        type = lib.types.enum [ "anthropic" "openai-compatible" "ollama" "rocm" "remote" ];
+        type = lib.types.enum [
+          "anthropic"
+          "openai-compatible"
+          "ollama"
+          "rocm"
+          "remote"
+        ];
       };
       modelName = lib.mkOption { type = lib.types.str; };
-      endpoint  = lib.mkOption { type = lib.types.str; default = ""; };
-      maxTokens   = lib.mkOption { type = lib.types.nullOr lib.types.int;   default = null; };
-      temperature = lib.mkOption { type = lib.types.nullOr lib.types.float; default = null; };
-      isDefault   = lib.mkOption { type = lib.types.bool; default = false; };
+      endpoint = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+      };
+      maxTokens = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+      };
+      temperature = lib.mkOption {
+        type = lib.types.nullOr lib.types.float;
+        default = null;
+      };
+      isDefault = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+      };
       extraConfig = lib.mkOption {
         type = lib.types.nullOr (lib.types.attrsOf lib.types.str);
         default = null;
@@ -42,15 +63,32 @@ let
     };
   };
 
-  modelsJson = pkgs.writeText "openclaw-models.json" (builtins.toJSON {
-    models = lib.mapAttrs (_: m: lib.filterAttrs (_: v: v != null) {
-      inherit (m) type modelName endpoint maxTokens temperature isDefault extraConfig;
-    }) cfg.models;
-    defaultModel =
-      if cfg.defaultModel != null then cfg.defaultModel
-      else let d = lib.filterAttrs (_: m: m.isDefault) cfg.models;
-      in if d != { } then builtins.head (builtins.attrNames d) else null;
-  });
+  modelsJson = pkgs.writeText "openclaw-models.json" (
+    builtins.toJSON {
+      models = lib.mapAttrs (
+        _: m:
+        lib.filterAttrs (_: v: v != null) {
+          inherit (m)
+            type
+            modelName
+            endpoint
+            maxTokens
+            temperature
+            isDefault
+            extraConfig
+            ;
+        }
+      ) cfg.models;
+      defaultModel =
+        if cfg.defaultModel != null then
+          cfg.defaultModel
+        else
+          let
+            d = lib.filterAttrs (_: m: m.isDefault) cfg.models;
+          in
+          if d != { } then builtins.head (builtins.attrNames d) else null;
+    }
+  );
 
   dataDir = cfg.dataDir;
 
@@ -89,8 +127,14 @@ in
       description = "Persistent data directory.";
     };
 
-    host = lib.mkOption { type = lib.types.str;  default = "127.0.0.1"; };
-    port = lib.mkOption { type = lib.types.port; default = 3000; };
+    host = lib.mkOption {
+      type = lib.types.str;
+      default = "127.0.0.1";
+    };
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 3000;
+    };
 
     environmentFiles = lib.mkOption {
       type = lib.types.listOf lib.types.path;
@@ -112,17 +156,25 @@ in
     };
 
     gitTracking = {
-      enable   = lib.mkOption { type = lib.types.bool; default = true; };
-      interval = lib.mkOption { type = lib.types.str;  default = "*:0/5"; };
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+      };
+      interval = lib.mkOption {
+        type = lib.types.str;
+        default = "*:0/5";
+      };
     };
   };
 
   config = lib.mkIf cfg.enable {
 
-    assertions = [{
-      assertion = cfg.package != null;
-      message   = "services.openclaw.package must be set (see README).";
-    }];
+    assertions = [
+      {
+        assertion = cfg.package != null;
+        message = "services.openclaw.package must be set (see README).";
+      }
+    ];
 
     # Ensure data directories exist via activation
     home.activation.openclawDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -138,24 +190,27 @@ in
       };
       Install.WantedBy = [ "default.target" ];
       Service = {
-        Type       = "simple";
-        ExecStart  = "${cfg.package}/bin/openclaw";
-        Restart    = "always";
+        Type = "simple";
+        ExecStart = "${cfg.package}/bin/openclaw";
+        Restart = "always";
         RestartSec = 5;
         WorkingDirectory = dataDir;
-        EnvironmentFile  = cfg.environmentFiles;
-        Environment = lib.mapAttrsToList (k: v: "${k}=${v}") ({
-          NODE_ENV               = "production";
-          OPENCLAW_HOST          = cfg.host;
-          OPENCLAW_PORT          = toString cfg.port;
-          OPENCLAW_DATA_DIR      = "${dataDir}/data";
-          OPENCLAW_CONFIG_DIR    = "${dataDir}/config";
-          OPENCLAW_LOG_DIR       = "${dataDir}/logs";
-          OPENCLAW_CACHE_DIR     = "${dataDir}/cache";
-          OPENCLAW_STAGING_DIR   = "${dataDir}/staging";
-          OPENCLAW_MODELS_CONFIG = toString modelsJson;
-          HOME                   = dataDir;
-        } // cfg.extraEnvironment);
+        EnvironmentFile = cfg.environmentFiles;
+        Environment = lib.mapAttrsToList (k: v: "${k}=${v}") (
+          {
+            NODE_ENV = "production";
+            OPENCLAW_HOST = cfg.host;
+            OPENCLAW_PORT = toString cfg.port;
+            OPENCLAW_DATA_DIR = "${dataDir}/data";
+            OPENCLAW_CONFIG_DIR = "${dataDir}/config";
+            OPENCLAW_LOG_DIR = "${dataDir}/logs";
+            OPENCLAW_CACHE_DIR = "${dataDir}/cache";
+            OPENCLAW_STAGING_DIR = "${dataDir}/staging";
+            OPENCLAW_MODELS_CONFIG = toString modelsJson;
+            HOME = dataDir;
+          }
+          // cfg.extraEnvironment
+        );
       };
     };
 

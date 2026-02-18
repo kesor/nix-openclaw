@@ -442,16 +442,16 @@ in
         "video"
         "render"
       ];
-      packages = lib.optionals cfg.shell.enable (
-        cfg.shell.extraPackages ++ [ cfg.package ]
-      );
+      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ cfg.package ]);
     };
     users.groups.${cfg.group} = { };
 
     # Source environment files in openclaw user's bash profile
     system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
-      ${lib.concatMapStringsSep "\n" (f: "[ -f ${f} ] && set -a && source ${f} && set +a") cfg.environmentFiles}
+      ${lib.concatMapStringsSep "\n" (
+        f: "[ -f ${f} ] && set -a && source ${f} && set +a"
+      ) cfg.environmentFiles}
       EOF
       cat > ${cfg.dataDir}/.bash_profile << 'EOF'
       [ -f ~/.bashrc ] && source ~/.bashrc
@@ -711,9 +711,7 @@ in
       pkgs.git
       pkgs.jq
     ]
-    ++ lib.optionals cfg.clawhub.enable [
-      (pkgs.callPackage ../clawhub.nix { })
-    ];
+    ++ lib.optionals cfg.clawhub.enable [ (pkgs.callPackage ../clawhub.nix { }) ];
 
     # ── User services conversion ─────────────────────────────────────────────
     systemd.user.services.openclaw-gateway = lib.mkIf cfg.runAsUserServices {
@@ -754,18 +752,20 @@ in
       };
     };
 
-    systemd.user.services.openclaw-git-track = lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable) {
-      description = "Auto-commit OpenClaw data changes";
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = gitTrackScript;
-      };
-      path = [
-        pkgs.git
-        pkgs.nodejs
-        pkgs.nodePackages.npm
-      ];
-    };
+    systemd.user.services.openclaw-git-track =
+      lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable)
+        {
+          description = "Auto-commit OpenClaw data changes";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = gitTrackScript;
+          };
+          path = [
+            pkgs.git
+            pkgs.nodejs
+            pkgs.nodePackages.npm
+          ];
+        };
 
     systemd.user.services.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
       description = "Backup OpenClaw data to Cloudflare R2";
@@ -796,21 +796,25 @@ in
       '';
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.browser.package}/bin/${cfg.browser.package.meta.mainProgram or "chromium"} --headless --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
+        ExecStart = "${cfg.browser.package}/bin/${
+          cfg.browser.package.meta.mainProgram or "chromium"
+        } --headless --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
         Restart = "always";
         RestartSec = "5s";
       };
     };
 
-    systemd.user.timers.openclaw-git-track = lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable) {
-      description = "Auto-commit OpenClaw data changes";
-      timerConfig = {
-        OnCalendar = cfg.gitTracking.interval;
-        Persistent = true;
-        RandomizedDelaySec = 30;
-      };
-      wantedBy = [ "timers.target" ];
-    };
+    systemd.user.timers.openclaw-git-track =
+      lib.mkIf (cfg.runAsUserServices && cfg.gitTracking.enable)
+        {
+          description = "Auto-commit OpenClaw data changes";
+          timerConfig = {
+            OnCalendar = cfg.gitTracking.interval;
+            Persistent = true;
+            RandomizedDelaySec = 30;
+          };
+          wantedBy = [ "timers.target" ];
+        };
 
     systemd.user.timers.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
       description = "Backup OpenClaw data to Cloudflare R2";
