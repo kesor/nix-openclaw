@@ -452,6 +452,7 @@ in
       ${lib.concatMapStringsSep "\n" (
         f: "[ -f ${f} ] && set -a && source ${f} && set +a"
       ) cfg.environmentFiles}
+      [ -f "${cfg.dataDir}/.openclaw/completions/openclaw.bash" ] && source "${cfg.dataDir}/.openclaw/completions/openclaw.bash"
       EOF
       cat > ${cfg.dataDir}/.bash_profile << 'EOF'
       [ -f ~/.bashrc ] && source ~/.bashrc
