@@ -815,6 +815,40 @@ in
       };
     };
 
+    systemd.user.services.openclaw-openbox = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
+      description = "Openbox window manager for OpenClaw Chrome";
+      after = [ "openclaw-xvfb.service" ];
+      requires = [ "openclaw-xvfb.service" ];
+      wantedBy = [ "default.target" ];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.openbox}/bin/openbox";
+        Restart = "always";
+        RestartSec = "5s";
+      };
+      environment = {
+        HOME = cfg.dataDir;
+        DISPLAY = ":99";
+      };
+    };
+
+    systemd.user.services.openclaw-tint2 = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
+      description = "Tint2 panel for OpenClaw Chrome";
+      after = [ "openclaw-openbox.service" ];
+      requires = [ "openclaw-openbox.service" ];
+      wantedBy = [ "default.target" ];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.tint2}/bin/tint2";
+        Restart = "always";
+        RestartSec = "5s";
+      };
+      environment = {
+        HOME = cfg.dataDir;
+        DISPLAY = ":99";
+      };
+    };
+
     systemd.user.services.openclaw-vnc = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
       description = "VNC server for OpenClaw Chrome display";
       after = [ "openclaw-xvfb.service" ];
