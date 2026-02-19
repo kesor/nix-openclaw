@@ -411,6 +411,21 @@ in
         default = [ ];
         description = "Additional command-line arguments for Chrome/Chromium";
       };
+      useVirtualDisplay = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Run Chrome with Xvfb virtual display instead of headless mode";
+      };
+      vncPort = lib.mkOption {
+        type = lib.types.port;
+        default = 5900;
+        description = "VNC port for accessing Chrome display (when useVirtualDisplay is enabled)";
+      };
+      displayResolution = lib.mkOption {
+        type = lib.types.str;
+        default = "2560x1440x24";
+        description = "Virtual display resolution (when useVirtualDisplay is enabled)";
+      };
     };
   };
 
@@ -785,10 +800,42 @@ in
       ];
     };
 
+    systemd.user.services.openclaw-xvfb = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
+      description = "Xvfb virtual display for OpenClaw Chrome";
+      before = [ "openclaw-chrome.service" ];
+      wantedBy = [ "default.target" ];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb :99 -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
+        Restart = "always";
+        RestartSec = "5s";
+      };
+      environment = {
+        HOME = cfg.dataDir;
+      };
+    };
+
+    systemd.user.services.openclaw-vnc = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
+      description = "VNC server for OpenClaw Chrome display";
+      after = [ "openclaw-xvfb.service" ];
+      requires = [ "openclaw-xvfb.service" ];
+      wantedBy = [ "default.target" ];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display :99 -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared";
+        Restart = "always";
+        RestartSec = "5s";
+      };
+      environment = {
+        HOME = cfg.dataDir;
+      };
+    };
+
     systemd.user.services.openclaw-chrome = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable) {
       description = "Headless Chrome for OpenClaw browser automation";
-      after = [ "network-online.target" ];
+      after = [ "network-online.target" ] ++ lib.optional cfg.browser.useVirtualDisplay "openclaw-xvfb.service";
       wants = [ "network-online.target" ];
+      requires = lib.optional cfg.browser.useVirtualDisplay "openclaw-xvfb.service";
       wantedBy = [ "default.target" ];
       preStart = ''
         mkdir -p ${cfg.dataDir}/.chrome-extension
@@ -799,9 +846,12 @@ in
         Type = "simple";
         ExecStart = "${cfg.browser.package}/bin/${
           cfg.browser.package.meta.mainProgram or "chromium"
-        } --headless --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
+        } ${lib.optionalString (!cfg.browser.useVirtualDisplay) "--headless"} --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
         Restart = "always";
         RestartSec = "5s";
+      };
+      environment = lib.optionalAttrs cfg.browser.useVirtualDisplay {
+        DISPLAY = ":99";
       };
     };
 
