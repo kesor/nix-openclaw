@@ -23,14 +23,11 @@ let
 
   common = import ./common.nix { inherit lib pkgs; };
 
-  defaultPackage =
-    if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
-
-  packageOverride =
-    if flake != null then
-      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash
+  openclawPackage =
+    if cfg.package != null then
+      cfg.package
     else
-      cfg.package;
+      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
 
   gitTrackScript = common.mkGitTrackScript {
     dataDir = cfg.dataDir;
@@ -61,15 +58,10 @@ in
   options.services.openclaw = {
     enable = lib.mkEnableOption "the OpenClaw AI application";
 
-    # ── Package ──────────────────────────────────────────────────────────────
     package = lib.mkOption {
-      type = lib.types.package;
-      default = defaultPackage;
-      defaultText = lib.literalExpression "flake.packages.\${system}.openclaw";
-      description = ''
-        OpenClaw derivation to run.  Override to use a local build or
-        different version.
-      '';
+      type = lib.types.nullOr lib.types.package;
+      default = flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw;
+      description = "OpenClaw package to use. Defaults to flake's package.";
     };
 
     pnpmDepsHash = lib.mkOption {
@@ -380,16 +372,7 @@ in
   config = lib.mkIf cfg.enable {
 
     # ── Assertions ───────────────────────────────────────────────────────────
-    assertions = [
-      {
-        assertion = packageOverride != null;
-        message = ''
-          services.openclaw.package must be set.
-          If you are using the flake, this is automatic.
-          Otherwise, build or supply the OpenClaw package manually.
-        '';
-      }
-    ];
+    assertions = [ ];
 
     # ── User / Group ─────────────────────────────────────────────────────────
     users.users.${cfg.user} = {
@@ -402,7 +385,7 @@ in
         "video"
         "render"
       ];
-      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ packageOverride ]);
+      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ openclawPackage ]);
     };
     users.groups.${cfg.group} = { };
 
@@ -499,7 +482,7 @@ in
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${packageOverride}/bin/openclaw-gateway";
+        ExecStart = "${openclawPackage}/bin/openclaw-gateway";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
@@ -642,7 +625,7 @@ in
         set -a
         ${lib.concatMapStringsSep "\n" (f: "source ${f} 2>/dev/null || true") cfg.environmentFiles}
         set +a
-        exec sudo -u ${cfg.user} ${packageOverride}/bin/openclaw "$@"
+        exec sudo -u ${cfg.user} ${openclawPackage}/bin/openclaw "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-status" ''
@@ -725,7 +708,7 @@ in
       // cfg.extraEnvironment;
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${packageOverride}/bin/openclaw-gateway";
+        ExecStart = "${openclawPackage}/bin/openclaw-gateway";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
@@ -860,7 +843,7 @@ in
       wantedBy = [ "default.target" ];
       preStart = ''
         mkdir -p ${cfg.dataDir}/.chrome-extension
-        cp -r ${packageOverride}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
+        cp -r ${openclawPackage}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
         chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}/.chrome-extension
       '';
       serviceConfig = {

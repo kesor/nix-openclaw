@@ -31,7 +31,7 @@
           pnpmDepsHash = pnpmDepsHash;
         };
 
-      # Default packages (without hash override - uses fakeHash initially)
+      # Default packages (uses fakeHash from package.nix by default)
       packages = forAllSystems (system: mkOpenclawPackage system null);
 
       # Pass to modules via a flake-like attribute set
