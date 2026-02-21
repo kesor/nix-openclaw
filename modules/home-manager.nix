@@ -31,7 +31,7 @@ let
       cfg.package
     else if flake != null then
       let
-        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system lib.fakeHash;
+        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
       in
       if cfg.packageOverride != null then cfg.packageOverride base else base
     else
@@ -63,6 +63,15 @@ in
       default = null;
       description = ''
         Function to override the package built from flake.
+      '';
+    };
+
+    pnpmDepsHash = lib.mkOption {
+      type = lib.types.str;
+      default = lib.fakeHash;
+      description = ''
+        SHA256 hash of pnpm dependencies. Run `nix build .#openclaw`
+        to get the expected hash error with the correct value.
       '';
     };
 
