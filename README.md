@@ -198,12 +198,13 @@ services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
 });
 ```
 
-To use both, chain them:
+To use both, chain them in a function:
 
 ```nix
-services.openclaw.packageOverride =
-  (pkgs.callPackage ./package.nix { }).override { nodejs = pkgs.nodejs_20; }
-    .overrideAttrs (old: { patches = [ ./my-fix.patch ]; });
+services.openclaw.packageOverride = pkg:
+  (pkg.override { nodejs = pkgs.nodejs_20; }).overrideAttrs (old: {
+    patches = [ ./my-fix.patch ];
+  });
 ```
 
 ## CLI Tools

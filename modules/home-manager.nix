@@ -36,6 +36,8 @@ let
       if cfg.packageOverride != null then
         if builtins.isFunction cfg.packageOverride then
           cfg.packageOverride base
+        else if lib.isDerivation cfg.packageOverride then
+          cfg.packageOverride
         else
           base.override cfg.packageOverride
       else
@@ -67,7 +69,7 @@ in
       type = lib.types.nullOr (
         lib.types.oneOf [
           lib.types.attrs
-          lib.types.functionTo
+          (lib.types.functionTo lib.types.package)
           lib.types.package
         ]
       );
@@ -75,27 +77,24 @@ in
       description = ''
         Override the package. Use:
         - Attrs to override package function parameters:
-          ````nix
+          ```nix
           services.openclaw.packageOverride = {
             nodejs = pkgs.nodejs_20;
           };
-          ````
+          ```
         - Or a function to modify the package:
-          ````nix
+          ```nix
           services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
             patches = [ ./my-fix.patch ];
           });
-          ````
-        - Chain both by using the attrs first, then the function:
-          ````nix
-          services.openclaw.packageOverride =
-            let
-              base = pkgs.callPackage ./package.nix { };
-            in
-            base.override { nodejs = pkgs.nodejs_20; }.overrideAttrs (old: {
+          ```
+        - Chain both by using a function:
+          ```nix
+          services.openclaw.packageOverride = pkg:
+            (pkg.override { nodejs = pkgs.nodejs_20; }).overrideAttrs (old: {
               patches = [ ./my-fix.patch ];
             });
-          ````
+          ```
       '';
     };
 
