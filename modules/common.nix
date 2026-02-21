@@ -39,7 +39,12 @@ let
             let
               d = lib.filterAttrs (_: m: m.isDefault or false) models;
             in
-            if d != { } then builtins.head (builtins.attrNames d) else null;
+            if d != { } then
+              builtins.head (builtins.attrNames d)
+            else if models != { } then
+              builtins.head (builtins.attrNames models)
+            else
+              null;
       }
     );
 
