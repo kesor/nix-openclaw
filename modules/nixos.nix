@@ -26,8 +26,10 @@ let
   openclawPackage =
     if cfg.package != null then
       cfg.package
+    else if flake != null then
+      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash
     else
-      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
+      throw "services.openclaw requires flake to be used";
 
   gitTrackScript = common.mkGitTrackScript {
     dataDir = cfg.dataDir;
@@ -60,7 +62,8 @@ in
 
     package = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
-      default = flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw;
+      default =
+        if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
       description = "OpenClaw package to use. Defaults to flake's package.";
     };
 
@@ -68,7 +71,7 @@ in
       type = lib.types.str;
       default = lib.fakeHash;
       description = ''
-        SHA256 hash of pnpm dependencies. Run `nix build` first
+        SHA256 hash of pnpm dependencies. Run `nix build .#openclaw`
         to get the expected hash error with the correct value.
       '';
     };
@@ -372,7 +375,6 @@ in
   config = lib.mkIf cfg.enable {
 
     # ── Assertions ───────────────────────────────────────────────────────────
-    assertions = [ ];
 
     # ── User / Group ─────────────────────────────────────────────────────────
     users.users.${cfg.user} = {
