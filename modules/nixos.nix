@@ -36,11 +36,13 @@ let
     dataDir = cfg.dataDir;
     gitTrackScript = gitTrackScript;
     retentionCount = cfg.backup.retentionCount;
+    storageProvider = cfg.backup.storageProvider;
   };
 
   r2RestoreScript = common.mkR2RestoreScript {
     dataDir = cfg.dataDir;
     gitTrackScript = gitTrackScript;
+    storageProvider = cfg.backup.storageProvider;
   };
 
   modelsJson = common.mkModelsJson cfg.models cfg.defaultModel;
@@ -148,9 +150,9 @@ in
       };
     };
 
-    # ── R2 backup ────────────────────────────────────────────────────────────
+    # ── Backup ────────────────────────────────────────────────────────────────
     backup = {
-      enable = lib.mkEnableOption "Cloudflare R2 backups";
+      enable = lib.mkEnableOption "S3-compatible storage backups (Cloudflare R2, AWS S3, MinIO, etc.)";
       interval = lib.mkOption {
         type = lib.types.str;
         default = "hourly";
@@ -159,6 +161,22 @@ in
         type = lib.types.nullOr lib.types.int;
         default = 168;
         description = "Remote backups to keep (null = unlimited).";
+      };
+      storageProvider = lib.mkOption {
+        type = lib.types.enum [
+          "r2"
+          "s3"
+          "minio"
+          "other"
+        ];
+        default = "r2";
+        description = ''
+          S3-compatible storage provider.
+          - r2: Cloudflare R2 (default)
+          - s3: AWS S3 or compatible
+          - minio: MinIO or compatible
+          - other: Generic S3-compatible (specify endpoint URL)
+        '';
       };
     };
 
