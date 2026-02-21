@@ -298,7 +298,7 @@ in
         cpuQuota = lib.mkOption {
           type = lib.types.str;
           default = "400%";
-          description = "CPUQuota - CPU time limit (percentage of one CPU)";
+          description = "CPUQuota - maximum CPU time (100% = 1 core, 200% = 2 cores, etc.)";
         };
       };
       gitTracking = {
@@ -415,6 +415,12 @@ in
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
+      # Restart limits go in [Unit] section
+      unitConfig = {
+        StartLimitBurst = cfg.tuning.restart.limitBurst;
+        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
+      };
+
       environment = {
         NODE_ENV = "production";
         OPENCLAW_STATE_DIR = cfg.dataDir;
@@ -454,10 +460,6 @@ in
         StandardOutput = "journal";
         StandardError = "journal";
         SyslogIdentifier = "openclaw";
-
-        # ── Restart limits ────────────────────────────────────────────────
-        StartLimitBurst = cfg.tuning.restart.limitBurst;
-        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
       }
       # ── Security hardening (conditional) ─────────────────────────────────
       // lib.optionalAttrs cfg.sandbox.enable {
@@ -641,6 +643,13 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "default.target" ];
+
+      # Restart limits go in [Unit] section
+      unitConfig = {
+        StartLimitBurst = cfg.tuning.restart.limitBurst;
+        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
+      };
+
       environment = {
         NODE_ENV = "production";
         OPENCLAW_STATE_DIR = cfg.dataDir;
@@ -672,10 +681,6 @@ in
         StandardOutput = "journal";
         StandardError = "journal";
         SyslogIdentifier = "openclaw";
-
-        # ── Restart limits ────────────────────────────────────────────────
-        StartLimitBurst = cfg.tuning.restart.limitBurst;
-        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
       };
     };
 
@@ -721,7 +726,7 @@ in
             Type = "simple";
             ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb ${cfg.browser.displayNumber} -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
@@ -739,7 +744,7 @@ in
             Type = "simple";
             ExecStart = "${pkgs.openbox}/bin/openbox";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
@@ -758,7 +763,7 @@ in
             Type = "simple";
             ExecStart = "${pkgs.tint2}/bin/tint2";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
@@ -777,7 +782,7 @@ in
             Type = "simple";
             ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display ${cfg.browser.displayNumber} -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
@@ -807,7 +812,7 @@ in
         RestartSec = "5s";
       };
       environment = lib.optionalAttrs cfg.browser.useVirtualDisplay {
-        DISPLAY = ":99";
+        DISPLAY = cfg.browser.displayNumber;
       };
     };
 
