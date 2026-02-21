@@ -26,6 +26,12 @@ let
   defaultPackage =
     if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
 
+  packageOverride =
+    if flake != null && cfg.pnpmDepsHash != null then
+      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash
+    else
+      cfg.package;
+
   gitTrackScript = common.mkGitTrackScript {
     dataDir = cfg.dataDir;
     scriptName = "openclaw-git-track";
@@ -63,6 +69,16 @@ in
       description = ''
         OpenClaw derivation to run.  Override to use a local build or
         different version.
+      '';
+    };
+
+    pnpmDepsHash = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        SHA256 hash of pnpm dependencies. Set this to the correct hash
+        to avoid fetch errors. Run `nix build` first to get the expected hash.
+        When null (default), uses the flake's default package.
       '';
     };
 
@@ -367,7 +383,7 @@ in
     # ── Assertions ───────────────────────────────────────────────────────────
     assertions = [
       {
-        assertion = cfg.package != null;
+        assertion = packageOverride != null;
         message = ''
           services.openclaw.package must be set.
           If you are using the flake, this is automatic.
@@ -387,7 +403,7 @@ in
         "video"
         "render"
       ];
-      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ cfg.package ]);
+      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ packageOverride ]);
     };
     users.groups.${cfg.group} = { };
 
@@ -484,7 +500,7 @@ in
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package}/bin/openclaw-gateway";
+        ExecStart = "${packageOverride}/bin/openclaw-gateway";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
@@ -627,7 +643,7 @@ in
         set -a
         ${lib.concatMapStringsSep "\n" (f: "source ${f} 2>/dev/null || true") cfg.environmentFiles}
         set +a
-        exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
+        exec sudo -u ${cfg.user} ${packageOverride}/bin/openclaw "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-status" ''
@@ -710,7 +726,7 @@ in
       // cfg.extraEnvironment;
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.package}/bin/openclaw-gateway";
+        ExecStart = "${packageOverride}/bin/openclaw-gateway";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
@@ -845,7 +861,7 @@ in
       wantedBy = [ "default.target" ];
       preStart = ''
         mkdir -p ${cfg.dataDir}/.chrome-extension
-        cp -r ${cfg.package}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
+        cp -r ${packageOverride}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
         chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}/.chrome-extension
       '';
       serviceConfig = {

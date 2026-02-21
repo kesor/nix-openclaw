@@ -23,17 +23,22 @@
         "aarch64-linux"
       ];
 
-      # Compute packages at flake level so modules can access them
-      packages = forAllSystems (
-        system:
+      # Build package with optional pnpmDepsHash override
+      mkOpenclawPackage =
+        system: pnpmDepsHash:
         (nixpkgs.legacyPackages.${system}).callPackage ./package.nix {
           src = inputs.openclaw-src;
-        }
-      );
+          pnpmDepsHash = pnpmDepsHash;
+        };
+
+      # Default packages (without hash override - uses fakeHash initially)
+      packages = forAllSystems (system: mkOpenclawPackage system null);
 
       # Pass to modules via a flake-like attribute set
       flakeForModules = {
         packages = packages;
+        openclawSrc = inputs.openclaw-src;
+        mkOpenclawPackage = mkOpenclawPackage;
       };
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
