@@ -1,15 +1,17 @@
 {
-  lib,
-  stdenv,
-  nodejs_22,
-  pnpmConfigHook,
-  fetchPnpmDeps,
-  makeWrapper,
-  esbuild,
   bun,
-  src,
-  version ? "0-unstable",
+  esbuild,
+  fetchPnpmDeps,
+  lib,
+  makeWrapper,
+  nodejs ? pkgs.nodejs_22,
+  pkgs,
+  pnpm,
+  pnpmConfigHook,
   pnpmDepsHash ? lib.fakeHash,
+  src,
+  stdenv,
+  version ? "0-unstable",
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -17,10 +19,11 @@ stdenv.mkDerivation (finalAttrs: {
   inherit version src;
 
   nativeBuildInputs = [
-    nodejs_22
-    pnpmConfigHook
-    makeWrapper
     bun
+    makeWrapper
+    nodejs
+    pnpm
+    pnpmConfigHook
   ];
 
   pnpmDeps = fetchPnpmDeps {
@@ -45,11 +48,11 @@ stdenv.mkDerivation (finalAttrs: {
     cp -r . $out/lib/openclaw/
 
     mkdir -p $out/bin
-    makeWrapper ${nodejs_22}/bin/node $out/bin/openclaw \
+    makeWrapper ${nodejs}/bin/node $out/bin/openclaw \
       --add-flags "$out/lib/openclaw/openclaw.mjs" \
       --set NODE_ENV production
 
-    makeWrapper ${nodejs_22}/bin/node $out/bin/openclaw-gateway \
+    makeWrapper ${nodejs}/bin/node $out/bin/openclaw-gateway \
       --add-flags "$out/lib/openclaw/openclaw.mjs" \
       --add-flags "gateway" \
       --set NODE_ENV production
