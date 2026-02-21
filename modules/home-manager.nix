@@ -39,7 +39,11 @@ let
         else if lib.isDerivation cfg.packageOverride then
           cfg.packageOverride
         else
-          base.override cfg.packageOverride
+          let
+            overrideAttrsFn = cfg.packageOverride.overrideAttrs or (_: { });
+            params = builtins.removeAttrs cfg.packageOverride [ "overrideAttrs" ];
+          in
+          (base.override params).overrideAttrs overrideAttrsFn
       else
         base
     else
