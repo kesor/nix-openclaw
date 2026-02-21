@@ -98,7 +98,7 @@ curl http://127.0.0.1:3000/
 | `enable` | `false` | Enable the OpenClaw service |
 | `package` | (flake's package) | OpenClaw package to use |
 | `pnpmDepsHash` | `lib.fakeHash` | SHA256 hash of pnpm dependencies (set to correct hash after first build) |
-| `packageOverride` | `null` | Function to override the package (e.g., `pkg: pkg.overrideAttrs (old: { patches = [./fix.patch]; })`) |
+| `packageOverride` | `null` | Attrs to override package parameters (e.g., `{ esbuild = pkgs.esbuild.overrideAttrs (...); }`) |
 | `user` | `"openclaw"` | System user to run as |
 | `group` | `"openclaw"` | System group |
 | `dataDir` | `"/var/lib/openclaw"` | Data directory |
@@ -182,20 +182,24 @@ nix build .#openclaw --override-input openclaw-src github:username/openclaw
 
 ### Customizing the package
 
-To add patches, extra build inputs, or other modifications to the package:
+To override package parameters:
 
 ```nix
-services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
-  patches = [ ./my-fix.patch ];
-});
+services.openclaw.packageOverride = {
+  esbuild = pkgs.esbuild.overrideAttrs (old: {
+    buildFlags = old.buildFlags ++ ["--some-flag"];
+  });
+};
 ```
 
-Or to add extra build inputs:
+Or to add patches:
 
 ```nix
-services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
-  nativeBuildInputs = old.nativeBuildInputs ++ [ someTool ];
-});
+services.openclaw.packageOverride = {
+  pnpmDeps = pkgs.pnpm.fetchDeps.overrideAttrs (old: {
+    # patches to apply
+  });
+};
 ```
 
 ## CLI Tools
