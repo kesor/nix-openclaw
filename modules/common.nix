@@ -14,6 +14,22 @@
 let
   modelOpts = import ../lib/models.nix { inherit lib; };
 
+  mkS3Config = storageProvider:
+    let
+      s3Provider =
+        {
+          r2 = "Cloudflare";
+          s3 = "AWS";
+          minio = "MinIO";
+          other = "";
+        }
+        .${storageProvider} or "";
+    in
+    {
+      s3ProviderFlag = lib.optionalString (s3Provider != "") "--s3-provider ${s3Provider}";
+      bucket = "''${OPENCLAW_S3_BUCKET:?}/backups";
+    };
+
   mkModelsJson =
     models: defaultModel:
     pkgs.writeText "openclaw-models.json" (
@@ -87,25 +103,15 @@ let
       storageProvider ? "r2",
     }:
     let
-      s3Provider =
-        {
-          r2 = "Cloudflare";
-          s3 = "AWS";
-          minio = "MinIO";
-          other = "";
-        }
-        .${storageProvider} or "";
-
-      s3ProviderFlag = lib.optionalString (s3Provider != "") "--s3-provider ${s3Provider}";
-
-      bucketPath = "s3:$OPENCLAW_S3_BUCKET/backups";
+      s3Config = mkS3Config storageProvider;
+      bucketPath = "s3:${s3Config.bucket}";
       retentionLogic = lib.optionalString (retentionCount != null) ''
         ${pkgs.rclone}/bin/rclone lsf \
           "${bucketPath}/" \
           --s3-access-key-id     "$OPENCLAW_S3_ACCESS_KEY_ID" \
           --s3-secret-access-key "$OPENCLAW_S3_SECRET_ACCESS_KEY" \
           --s3-endpoint          "$OPENCLAW_S3_ENDPOINT" \
-          ${s3ProviderFlag} \
+          ${s3Config.s3ProviderFlag} \
           --s3-no-check-bucket \
         | sort | head -n -${toString retentionCount} \
         | while IFS= read -r old; do
@@ -114,7 +120,7 @@ let
               --s3-access-key-id     "$OPENCLAW_S3_ACCESS_KEY_ID" \
               --s3-secret-access-key "$OPENCLAW_S3_SECRET_ACCESS_KEY" \
               --s3-endpoint          "$OPENCLAW_S3_ENDPOINT" \
-              ${s3ProviderFlag} \
+              ${s3Config.s3ProviderFlag} \
               --s3-no-check-bucket || true
         done
       '';
@@ -142,7 +148,7 @@ let
         --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
         --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
         --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
-        ${s3ProviderFlag} \
+        ${s3Config.s3ProviderFlag} \
         --s3-no-check-bucket \
         --verbose
 
@@ -160,18 +166,8 @@ let
       storageProvider ? "r2",
     }:
     let
-      s3Provider =
-        {
-          r2 = "Cloudflare";
-          s3 = "AWS";
-          minio = "MinIO";
-          other = "";
-        }
-        .${storageProvider} or "";
-
-      s3ProviderFlag = lib.optionalString (s3Provider != "") "--s3-provider ${s3Provider}";
-
-      bucketPath = "s3:$OPENCLAW_S3_BUCKET/backups";
+      s3Config = mkS3Config storageProvider;
+      bucketPath = "s3:${s3Config.bucket}";
     in
     pkgs.writeShellScript "openclaw-restore" ''
       set -euo pipefail
@@ -185,7 +181,7 @@ let
           --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
           --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
           --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
-          ${s3ProviderFlag} \
+          ${s3Config.s3ProviderFlag} \
           --s3-no-check-bucket | sort
         echo ""; echo "Usage: openclaw-restore <filename>"; exit 1
       fi
@@ -196,7 +192,7 @@ let
         --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
         --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
         --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
-        ${s3ProviderFlag} \
+        ${s3Config.s3ProviderFlag} \
         --s3-no-check-bucket --verbose
 
       ${lib.optionalString (gitTrackScript != null) ''

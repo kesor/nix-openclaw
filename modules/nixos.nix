@@ -171,7 +171,8 @@ in
         ];
         default = "r2";
         description = ''
-          S3-compatible storage provider.
+          S3-compatible storage provider. This configures the --s3-provider flag
+          for rclone for optimal compatibility with each backend.
           - r2: Cloudflare R2 (default)
           - s3: AWS S3 or compatible
           - minio: MinIO or compatible
