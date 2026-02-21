@@ -27,7 +27,10 @@ let
     if cfg.package != null then
       cfg.package
     else if flake != null then
-      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash
+      let
+        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
+      in
+      if cfg.packageOverride != null then cfg.packageOverride base else base
     else
       throw "services.openclaw requires flake to be used";
 
@@ -65,6 +68,21 @@ in
       default =
         if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
       description = "OpenClaw package to use. Defaults to flake's package.";
+    };
+
+    packageOverride = lib.mkOption {
+      type = lib.types.nullOr lib.types.functionTo lib.types.package;
+      default = null;
+      description = ''
+        Function to override the package built from flake. Use to add patches,
+        extraBuildInputs, etc.
+        Example:
+        ````nix
+        services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
+          patches = [ ./my-fix.patch ];
+        });
+        ````
+      '';
     };
 
     pnpmDepsHash = lib.mkOption {

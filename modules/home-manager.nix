@@ -26,8 +26,16 @@ let
 
   common = import ./common.nix { inherit lib pkgs; };
 
-  defaultPackage =
-    if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
+  openclawPackage =
+    if cfg.package != null then
+      cfg.package
+    else if flake != null then
+      let
+        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system lib.fakeHash;
+      in
+      if cfg.packageOverride != null then cfg.packageOverride base else base
+    else
+      throw "services.openclaw requires flake to be used";
 
   dataDir = cfg.dataDir;
 
@@ -44,9 +52,18 @@ in
     enable = lib.mkEnableOption "OpenClaw (Home-Manager user service)";
 
     package = lib.mkOption {
-      type = lib.types.package;
-      default = defaultPackage;
-      defaultText = lib.literalExpression "flake.packages.\${system}.openclaw";
+      type = lib.types.nullOr lib.types.package;
+      default =
+        if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
+      description = "OpenClaw package to use. Defaults to flake's package.";
+    };
+
+    packageOverride = lib.mkOption {
+      type = lib.types.nullOr lib.types.functionTo lib.types.package;
+      default = null;
+      description = ''
+        Function to override the package built from flake.
+      '';
     };
 
     dataDir = lib.mkOption {
@@ -124,7 +141,7 @@ in
 
     assertions = [
       {
-        assertion = cfg.package != null;
+        assertion = openclawPackage != null;
         message = "services.openclaw.package must be set (see README).";
       }
     ];
@@ -142,7 +159,7 @@ in
       Install.WantedBy = [ "default.target" ];
       Service = {
         Type = "simple";
-        ExecStart = "${cfg.package}/bin/openclaw";
+        ExecStart = "${openclawPackage}/bin/openclaw";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = dataDir;
