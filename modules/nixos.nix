@@ -253,6 +253,16 @@ in
         default = 5900;
         description = "VNC port for accessing Chrome display (when useVirtualDisplay is enabled)";
       };
+      vncPassword = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          VNC password for authentication. When null (default), password-less access is used.
+          WARNING: Even with -localhost, this allows any local user to access your session.
+          Consider using SSH tunneling or restricting to trusted single-user systems.
+          When set, password file is created at $dataDir/.vnc/passwd.
+        '';
+      };
       displayResolution = lib.mkOption {
         type = lib.types.str;
         default = "2560x1440x24";
@@ -362,6 +372,14 @@ in
     };
     users.groups.${cfg.group} = { };
 
+    # Create VNC password file if configured
+    system.activationScripts.openclaw-vnc-password = lib.mkIf (cfg.browser.vncPassword != null) ''
+      mkdir -p ${cfg.dataDir}/.vnc
+      printf '%s\n%s\n' "${cfg.browser.vncPassword}" "${cfg.browser.vncPassword}" | ${pkgs.x11vnc}/bin/x11vnc -storepasswd -f > ${cfg.dataDir}/.vnc/passwd 2>/dev/null || true
+      chmod 600 ${cfg.dataDir}/.vnc/passwd
+      chown ${cfg.user}:${cfg.group} ${cfg.dataDir}/.vnc/passwd
+    '';
+
     # Source environment files in openclaw user's bash profile
     system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
@@ -390,6 +408,9 @@ in
         "d ${cfg.dataDir}/cache      0750 ${o} ${g} -"
         "d ${cfg.dataDir}/staging    0750 ${o} ${g} -"
         "d ${cfg.dataDir}/secrets    0700 ${o} ${g} -"
+      ]
+      ++ lib.optionals (cfg.browser.vncPassword != null) [
+        "d ${cfg.dataDir}/.vnc      0700 ${o} ${g} -"
       ]
       ++ lib.optionals (cfg.nixosConfigDir != null) [
         "d ${cfg.dataDir}/nixos-proposals 0750 ${o} ${g} -"
@@ -780,7 +801,12 @@ in
           wantedBy = [ "default.target" ];
           serviceConfig = {
             Type = "simple";
-            ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display ${cfg.browser.displayNumber} -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
+            ExecStart =
+              let
+                vncAuth =
+                  if cfg.browser.vncPassword != null then "-rfbauth ${cfg.dataDir}/.vnc/passwd" else "-nopw";
+              in
+              "${pkgs.x11vnc}/bin/x11vnc -display ${cfg.browser.displayNumber} ${vncAuth} -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
             Restart = "always";
             RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
