@@ -93,6 +93,31 @@ in
         default = "*:0/5";
       };
     };
+
+    # ── Tuning / Performance ───────────────────────────────────────────────────
+    tuning = {
+      restart = {
+        sec = lib.mkOption {
+          type = lib.types.int;
+          default = 5;
+          description = "RestartSec - seconds to wait before restarting";
+        };
+      };
+      gitTracking = {
+        randomDelay = lib.mkOption {
+          type = lib.types.int;
+          default = 30;
+          description = "RandomizedDelaySec - random delay before git auto-commit (seconds)";
+        };
+      };
+      status = {
+        logLines = lib.mkOption {
+          type = lib.types.int;
+          default = 15;
+          description = "Number of log lines to show in openclaw-status";
+        };
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -119,7 +144,7 @@ in
         Type = "simple";
         ExecStart = "${cfg.package}/bin/openclaw";
         Restart = "always";
-        RestartSec = 5;
+        RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = dataDir;
         EnvironmentFile = cfg.environmentFiles;
         Environment = lib.mapAttrsToList (k: v: "${k}=${v}") (
@@ -153,13 +178,14 @@ in
       Timer = {
         OnCalendar = cfg.gitTracking.interval;
         Persistent = true;
+        RandomizedDelaySec = cfg.tuning.gitTracking.randomDelay;
       };
     };
 
     home.packages = [
       (pkgs.writeShellScriptBin "openclaw-status" ''
         systemctl --user status openclaw.service --no-pager 2>&1 || true
-        echo ""; journalctl --user -u openclaw.service -n 15 --no-pager 2>&1 || true
+        echo ""; journalctl --user -u openclaw.service -n ${toString cfg.tuning.status.logLines} --no-pager 2>&1 || true
       '')
       (pkgs.writeShellScriptBin "openclaw-logs" ''
         exec journalctl --user -u openclaw.service -f "$@"

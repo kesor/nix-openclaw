@@ -253,10 +253,89 @@ in
         default = 5900;
         description = "VNC port for accessing Chrome display (when useVirtualDisplay is enabled)";
       };
+      vncPassword = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          VNC password for authentication. When null (default), password-less access is used.
+          WARNING: Even with -localhost, this allows any local user to access your session.
+          Consider using SSH tunneling or restricting to trusted single-user systems.
+          When set, password file is created at $dataDir/.vnc/passwd.
+        '';
+      };
       displayResolution = lib.mkOption {
         type = lib.types.str;
         default = "2560x1440x24";
         description = "Virtual display resolution (when useVirtualDisplay is enabled)";
+      };
+      displayNumber = lib.mkOption {
+        type = lib.types.str;
+        default = ":99";
+        description = "Xvfb display number for virtual display mode";
+      };
+    };
+
+    # ── Tuning / Performance ───────────────────────────────────────────────────
+    tuning = {
+      restart = {
+        limitBurst = lib.mkOption {
+          type = lib.types.int;
+          default = 5;
+          description = "StartLimitBurst - max restarts within interval before stopping";
+        };
+        limitInterval = lib.mkOption {
+          type = lib.types.int;
+          default = 300;
+          description = "StartLimitIntervalSec - time window for restart limits (seconds)";
+        };
+        sec = lib.mkOption {
+          type = lib.types.int;
+          default = 5;
+          description = "RestartSec - seconds to wait before restarting";
+        };
+      };
+      resources = {
+        maxMemory = lib.mkOption {
+          type = lib.types.str;
+          default = "8G";
+          description = "MemoryMax - maximum memory the service can use";
+        };
+        maxFiles = lib.mkOption {
+          type = lib.types.int;
+          default = 65536;
+          description = "LimitNOFILE - maximum number of open files";
+        };
+        cpuQuota = lib.mkOption {
+          type = lib.types.str;
+          default = "400%";
+          description = "CPUQuota - maximum CPU time (100% = 1 core, 200% = 2 cores, etc.)";
+        };
+      };
+      gitTracking = {
+        randomDelay = lib.mkOption {
+          type = lib.types.int;
+          default = 30;
+          description = "RandomizedDelaySec - random delay before git auto-commit (seconds)";
+        };
+      };
+      backup = {
+        randomDelay = lib.mkOption {
+          type = lib.types.int;
+          default = 300;
+          description = "RandomizedDelaySec - random delay before backup (seconds)";
+        };
+      };
+      status = {
+        logLines = lib.mkOption {
+          type = lib.types.int;
+          default = 25;
+          description = "Number of log lines to show in openclaw-status";
+        };
+        gitLogLines = lib.mkOption {
+          type = lib.types.int;
+          default = 10;
+          description = "Number of git commits to show in openclaw-status";
+        };
       };
     };
   };
@@ -293,6 +372,14 @@ in
     };
     users.groups.${cfg.group} = { };
 
+    # Create VNC password file if configured
+    system.activationScripts.openclaw-vnc-password = lib.mkIf (cfg.browser.vncPassword != null) ''
+      mkdir -p ${cfg.dataDir}/.vnc
+      printf '%s\n%s\n' "${cfg.browser.vncPassword}" "${cfg.browser.vncPassword}" | ${pkgs.x11vnc}/bin/x11vnc -storepasswd -f > ${cfg.dataDir}/.vnc/passwd 2>/dev/null || true
+      chmod 600 ${cfg.dataDir}/.vnc/passwd
+      chown ${cfg.user}:${cfg.group} ${cfg.dataDir}/.vnc/passwd
+    '';
+
     # Source environment files in openclaw user's bash profile
     system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
@@ -322,6 +409,9 @@ in
         "d ${cfg.dataDir}/staging    0750 ${o} ${g} -"
         "d ${cfg.dataDir}/secrets    0700 ${o} ${g} -"
       ]
+      ++ lib.optionals (cfg.browser.vncPassword != null) [
+        "d ${cfg.dataDir}/.vnc      0700 ${o} ${g} -"
+      ]
       ++ lib.optionals (cfg.nixosConfigDir != null) [
         "d ${cfg.dataDir}/nixos-proposals 0750 ${o} ${g} -"
       ]
@@ -345,6 +435,12 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
+
+      # Restart limits go in [Unit] section
+      unitConfig = {
+        StartLimitBurst = cfg.tuning.restart.limitBurst;
+        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
+      };
 
       environment = {
         NODE_ENV = "production";
@@ -371,15 +467,15 @@ in
         Group = cfg.group;
         ExecStart = "${cfg.package}/bin/openclaw-gateway";
         Restart = "always";
-        RestartSec = 5;
+        RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
 
         EnvironmentFile = cfg.environmentFiles;
 
         # ── Resource limits ──────────────────────────────────────────────
-        LimitNOFILE = 65536;
-        MemoryMax = "8G";
-        CPUQuota = "400%";
+        LimitNOFILE = cfg.tuning.resources.maxFiles;
+        MemoryMax = cfg.tuning.resources.maxMemory;
+        CPUQuota = cfg.tuning.resources.cpuQuota;
 
         # ── Logging ──────────────────────────────────────────────────────
         StandardOutput = "journal";
@@ -466,7 +562,7 @@ in
       timerConfig = {
         OnCalendar = cfg.gitTracking.interval;
         Persistent = true;
-        RandomizedDelaySec = 30;
+        RandomizedDelaySec = cfg.tuning.gitTracking.randomDelay;
       };
     };
 
@@ -502,7 +598,7 @@ in
       timerConfig = {
         OnCalendar = cfg.backup.interval;
         Persistent = true;
-        RandomizedDelaySec = 300;
+        RandomizedDelaySec = cfg.tuning.backup.randomDelay;
       };
     };
 
@@ -520,15 +616,15 @@ in
         echo "══ service ══"
         systemctl status openclaw-gateway.service --no-pager 2>&1 || true
         echo ""
-        echo "══ last 25 log lines ══"
-        journalctl -u openclaw-gateway.service -n 25 --no-pager 2>&1 || true
+        echo "══ last ${toString cfg.tuning.status.logLines} log lines ══"
+        journalctl -u openclaw-gateway.service -n ${toString cfg.tuning.status.logLines} --no-pager 2>&1 || true
         echo ""
         echo "══ disk usage ══"
         du -sh ${cfg.dataDir}/*/ 2>/dev/null || echo "(empty)"
         ${lib.optionalString cfg.gitTracking.enable ''
           echo ""
-          echo "══ git log (last 10) ══"
-          cd ${cfg.dataDir} && ${pkgs.git}/bin/git log --oneline -10 2>/dev/null || echo "(no commits)"
+          echo "══ git log (last ${toString cfg.tuning.status.gitLogLines}) ══"
+          cd ${cfg.dataDir} && ${pkgs.git}/bin/git log --oneline -${toString cfg.tuning.status.gitLogLines} 2>/dev/null || echo "(no commits)"
         ''}
       '')
 
@@ -568,6 +664,13 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "default.target" ];
+
+      # Restart limits go in [Unit] section
+      unitConfig = {
+        StartLimitBurst = cfg.tuning.restart.limitBurst;
+        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
+      };
+
       environment = {
         NODE_ENV = "production";
         OPENCLAW_STATE_DIR = cfg.dataDir;
@@ -590,12 +693,12 @@ in
         Type = "simple";
         ExecStart = "${cfg.package}/bin/openclaw-gateway";
         Restart = "always";
-        RestartSec = 5;
+        RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
         EnvironmentFile = cfg.environmentFiles;
-        LimitNOFILE = 65536;
-        MemoryMax = "8G";
-        CPUQuota = "400%";
+        LimitNOFILE = cfg.tuning.resources.maxFiles;
+        MemoryMax = cfg.tuning.resources.maxMemory;
+        CPUQuota = cfg.tuning.resources.cpuQuota;
         StandardOutput = "journal";
         StandardError = "journal";
         SyslogIdentifier = "openclaw";
@@ -642,9 +745,9 @@ in
           wantedBy = [ "default.target" ];
           serviceConfig = {
             Type = "simple";
-            ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb :99 -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
+            ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb ${cfg.browser.displayNumber} -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
@@ -662,11 +765,11 @@ in
             Type = "simple";
             ExecStart = "${pkgs.openbox}/bin/openbox";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
-            DISPLAY = ":99";
+            DISPLAY = cfg.browser.displayNumber;
           };
         };
 
@@ -681,11 +784,11 @@ in
             Type = "simple";
             ExecStart = "${pkgs.tint2}/bin/tint2";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
-            DISPLAY = ":99";
+            DISPLAY = cfg.browser.displayNumber;
           };
         };
 
@@ -698,9 +801,14 @@ in
           wantedBy = [ "default.target" ];
           serviceConfig = {
             Type = "simple";
-            ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display :99 -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
+            ExecStart =
+              let
+                vncAuth =
+                  if cfg.browser.vncPassword != null then "-rfbauth ${cfg.dataDir}/.vnc/passwd" else "-nopw";
+              in
+              "${pkgs.x11vnc}/bin/x11vnc -display ${cfg.browser.displayNumber} ${vncAuth} -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
             Restart = "always";
-            RestartSec = "5s";
+            RestartSec = "${toString cfg.tuning.restart.sec}s";
           };
           environment = {
             HOME = cfg.dataDir;
@@ -730,7 +838,7 @@ in
         RestartSec = "5s";
       };
       environment = lib.optionalAttrs cfg.browser.useVirtualDisplay {
-        DISPLAY = ":99";
+        DISPLAY = cfg.browser.displayNumber;
       };
     };
 
@@ -741,7 +849,7 @@ in
           timerConfig = {
             OnCalendar = cfg.gitTracking.interval;
             Persistent = true;
-            RandomizedDelaySec = 30;
+            RandomizedDelaySec = cfg.tuning.gitTracking.randomDelay;
           };
           wantedBy = [ "timers.target" ];
         };
@@ -751,7 +859,7 @@ in
       timerConfig = {
         OnCalendar = cfg.backup.interval;
         Persistent = true;
-        RandomizedDelaySec = 300;
+        RandomizedDelaySec = cfg.tuning.backup.randomDelay;
       };
       wantedBy = [ "timers.target" ];
     };
