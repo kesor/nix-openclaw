@@ -68,11 +68,11 @@ sudo tee /var/lib/openclaw/secrets/env > /dev/null << 'EOF'
 ANTHROPIC_API_KEY=sk-ant-XXXX
 OPENCLAW_SECRET=your-secret-string
 
-# R2 backups (if backup.enable = true)
-CLOUDFLARE_R2_ACCESS_KEY_ID=XXXX
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=XXXX
-CLOUDFLARE_R2_BUCKET=openclaw-backups
-CLOUDFLARE_R2_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
+# S3 backups (if backup.enable = true)
+OPENCLAW_S3_ACCESS_KEY_ID=XXXX
+OPENCLAW_S3_SECRET_ACCESS_KEY=XXXX
+OPENCLAW_S3_BUCKET=openclaw-backups
+OPENCLAW_S3_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
 EOF
 sudo chmod 600 /var/lib/openclaw/secrets/env
 ```
@@ -127,9 +127,10 @@ curl http://127.0.0.1:3000/
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `enable` | `false` | Enable R2 backups |
+| `enable` | `false` | Enable S3-compatible backups |
 | `interval` | `"hourly"` | Timer schedule |
 | `retentionCount` | `168` | Backups to keep |
+| `storageProvider` | `"r2"` | Storage: `r2` (Cloudflare), `s3` (AWS), `minio`, `other` |
 
 ### Tuning (`services.openclaw.tuning.*`)
 
@@ -213,7 +214,7 @@ Place in your secrets file (via `environmentFiles`):
 | `OPENAI_API_KEY` | OpenAI models | OpenAI API key |
 | `ANTHROPIC_BASE_URL` | Custom endpoint | Override Anthropic endpoint |
 | `OPENAI_BASE_URL` | Custom endpoint | Override OpenAI endpoint |
-| `CLOUDFLARE_R2_ACCESS_KEY_ID` | `backup.enable = true` | R2 API key ID |
-| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | `backup.enable = true` | R2 API secret |
-| `CLOUDFLARE_R2_BUCKET` | `backup.enable = true` | R2 bucket name |
-| `CLOUDFLARE_R2_ENDPOINT` | `backup.enable = true` | R2 endpoint URL |
+| `OPENCLAW_S3_ACCESS_KEY_ID` | `backup.enable = true` | S3 API access key |
+| `OPENCLAW_S3_SECRET_ACCESS_KEY` | `backup.enable = true` | S3 API secret |
+| `OPENCLAW_S3_BUCKET` | `backup.enable = true` | S3 bucket name |
+| `OPENCLAW_S3_ENDPOINT` | `backup.enable = true` | S3 endpoint URL |

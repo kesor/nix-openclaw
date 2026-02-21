@@ -14,6 +14,22 @@
 let
   modelOpts = import ../lib/models.nix { inherit lib; };
 
+  mkS3Config = storageProvider:
+    let
+      s3Provider =
+        {
+          r2 = "Cloudflare";
+          s3 = "AWS";
+          minio = "MinIO";
+          other = "";
+        }
+        .${storageProvider} or "";
+    in
+    {
+      s3ProviderFlag = lib.optionalString (s3Provider != "") "--s3-provider ${s3Provider}";
+      bucket = "''${OPENCLAW_S3_BUCKET:?}/backups";
+    };
+
   mkModelsJson =
     models: defaultModel:
     pkgs.writeText "openclaw-models.json" (
@@ -84,30 +100,34 @@ let
       dataDir,
       gitTrackScript ? null,
       retentionCount ? null,
+      storageProvider ? "r2",
     }:
     let
+      s3Config = mkS3Config storageProvider;
+      bucketPath = "s3:${s3Config.bucket}";
       retentionLogic = lib.optionalString (retentionCount != null) ''
         ${pkgs.rclone}/bin/rclone lsf \
-          "r2:$CLOUDFLARE_R2_BUCKET/backups/" \
-          --s3-provider Cloudflare \
-          --s3-access-key-id     "$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-          --s3-secret-access-key "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-          --s3-endpoint          "$CLOUDFLARE_R2_ENDPOINT" \
+          "${bucketPath}/" \
+          --s3-access-key-id     "$OPENCLAW_S3_ACCESS_KEY_ID" \
+          --s3-secret-access-key "$OPENCLAW_S3_SECRET_ACCESS_KEY" \
+          --s3-endpoint          "$OPENCLAW_S3_ENDPOINT" \
+          ${s3Config.s3ProviderFlag} \
           --s3-no-check-bucket \
         | sort | head -n -${toString retentionCount} \
         | while IFS= read -r old; do
             ${pkgs.rclone}/bin/rclone deletefile \
-              "r2:$CLOUDFLARE_R2_BUCKET/backups/$old" \
-              --s3-provider Cloudflare \
-              --s3-access-key-id     "$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-              --s3-secret-access-key "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-              --s3-endpoint          "$CLOUDFLARE_R2_ENDPOINT" \
+              "${bucketPath}/$old" \
+              --s3-access-key-id     "$OPENCLAW_S3_ACCESS_KEY_ID" \
+              --s3-secret-access-key "$OPENCLAW_S3_SECRET_ACCESS_KEY" \
+              --s3-endpoint          "$OPENCLAW_S3_ENDPOINT" \
+              ${s3Config.s3ProviderFlag} \
               --s3-no-check-bucket || true
         done
       '';
     in
-    pkgs.writeShellScript "openclaw-r2-backup" ''
+    pkgs.writeShellScript "openclaw-backup" ''
       set -euo pipefail
+      : "''${OPENCLAW_S3_BUCKET:?must be set}"
       NAME="openclaw-$(date -u +%Y%m%d-%H%M%S).tar.zst"
       TMP="/tmp/$NAME"
 
@@ -124,11 +144,11 @@ let
         .
 
       ${pkgs.rclone}/bin/rclone copyto "$TMP" \
-        "r2:''${CLOUDFLARE_R2_BUCKET:?must be set}/backups/$NAME" \
-        --s3-provider    Cloudflare \
-        --s3-access-key-id     "''${CLOUDFLARE_R2_ACCESS_KEY_ID:?}" \
-        --s3-secret-access-key "''${CLOUDFLARE_R2_SECRET_ACCESS_KEY:?}" \
-        --s3-endpoint          "''${CLOUDFLARE_R2_ENDPOINT:?}" \
+        "${bucketPath}/$NAME" \
+        --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
+        --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
+        --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
+        ${s3Config.s3ProviderFlag} \
         --s3-no-check-bucket \
         --verbose
 
@@ -143,30 +163,36 @@ let
     {
       dataDir,
       gitTrackScript ? null,
+      storageProvider ? "r2",
     }:
-    pkgs.writeShellScript "openclaw-r2-restore" ''
+    let
+      s3Config = mkS3Config storageProvider;
+      bucketPath = "s3:${s3Config.bucket}";
+    in
+    pkgs.writeShellScript "openclaw-restore" ''
       set -euo pipefail
+      : "''${OPENCLAW_S3_BUCKET:?must be set}"
 
       FILE="''${1:-}"
       if [ -z "$FILE" ]; then
-        echo "Available backups on R2:"
+        echo "Available backups:"
         ${pkgs.rclone}/bin/rclone lsf \
-          "r2:''${CLOUDFLARE_R2_BUCKET:?}/backups/" \
-          --s3-provider Cloudflare \
-          --s3-access-key-id     "''${CLOUDFLARE_R2_ACCESS_KEY_ID:?}" \
-          --s3-secret-access-key "''${CLOUDFLARE_R2_SECRET_ACCESS_KEY:?}" \
-          --s3-endpoint          "''${CLOUDFLARE_R2_ENDPOINT:?}" \
+          "${bucketPath}/" \
+          --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
+          --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
+          --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
+          ${s3Config.s3ProviderFlag} \
           --s3-no-check-bucket | sort
         echo ""; echo "Usage: openclaw-restore <filename>"; exit 1
       fi
 
       TMP="/tmp/openclaw-restore.tar.zst"
       ${pkgs.rclone}/bin/rclone copyto \
-        "r2:$CLOUDFLARE_R2_BUCKET/backups/$FILE" "$TMP" \
-        --s3-provider Cloudflare \
-        --s3-access-key-id     "$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-        --s3-secret-access-key "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-        --s3-endpoint          "$CLOUDFLARE_R2_ENDPOINT" \
+        "${bucketPath}/$FILE" "$TMP" \
+        --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
+        --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
+        --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
+        ${s3Config.s3ProviderFlag} \
         --s3-no-check-bucket --verbose
 
       ${lib.optionalString (gitTrackScript != null) ''
