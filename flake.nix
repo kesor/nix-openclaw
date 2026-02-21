@@ -38,7 +38,6 @@
       flakeForModules = {
         packages = packages;
         openclawSrc = inputs.openclaw-src;
-        mkOpenclawPackage = mkOpenclawPackage;
       };
     in
     flake-parts.lib.mkFlake { inherit inputs; } {
