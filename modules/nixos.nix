@@ -21,197 +21,29 @@ flake: # null when imported without flakes
 let
   cfg = config.services.openclaw;
 
-  # Resolve the default package.  When consumed via the flake we can derive
-  # the package automatically; otherwise the user must set `package`.
+  common = import ./common.nix { inherit lib pkgs; };
+
   defaultPackage =
     if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
 
-  # ── Script: git auto-commit ────────────────────────────────────────────────
-  gitTrackScript = pkgs.writeShellScript "openclaw-git-track" ''
-    set -euo pipefail
-    cd "${cfg.dataDir}"
-
-    if [ ! -d ".git" ]; then
-      ${pkgs.git}/bin/git init
-      ${pkgs.git}/bin/git config user.email "openclaw-tracker@localhost"
-      ${pkgs.git}/bin/git config user.name  "OpenClaw Auto-Tracker"
-      cat > .gitignore <<'GI'
-    logs/
-    cache/
-    *.tmp
-    *.swp
-    node_modules/
-    .npm/
-    secrets/
-    GI
-      ${pkgs.git}/bin/git add -A
-      ${pkgs.git}/bin/git commit -m "init: auto-tracked by nix-openclaw" --allow-empty
-    fi
-
-    ${pkgs.git}/bin/git add -A
-    if ! ${pkgs.git}/bin/git diff --cached --quiet 2>/dev/null; then
-      TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      STAT=$(${pkgs.git}/bin/git diff --cached --shortstat)
-      ${pkgs.git}/bin/git commit -m "auto: $TS — $STAT"
-    fi
-  '';
-
-  # ── Script: R2 backup ─────────────────────────────────────────────────────
-  r2BackupScript = pkgs.writeShellScript "openclaw-r2-backup" ''
-    set -euo pipefail
-    NAME="openclaw-$(date -u +%Y%m%d-%H%M%S).tar.zst"
-    TMP="/tmp/$NAME"
-
-    # Commit first so the backup includes the latest state
-    ${gitTrackScript} || true
-
-    ${pkgs.gnutar}/bin/tar \
-      --create --zstd \
-      --file="$TMP" \
-      --directory="${cfg.dataDir}" \
-      --exclude='logs' --exclude='cache' --exclude='*.tmp' --exclude='secrets' \
-      .
-
-    ${pkgs.rclone}/bin/rclone copyto "$TMP" \
-      "r2:''${CLOUDFLARE_R2_BUCKET:?must be set}/backups/$NAME" \
-      --s3-provider    Cloudflare \
-      --s3-access-key-id     "''${CLOUDFLARE_R2_ACCESS_KEY_ID:?}" \
-      --s3-secret-access-key "''${CLOUDFLARE_R2_SECRET_ACCESS_KEY:?}" \
-      --s3-endpoint          "''${CLOUDFLARE_R2_ENDPOINT:?}" \
-      --s3-no-check-bucket \
-      --verbose
-
-    rm -f "$TMP"
-
-    ${lib.optionalString (cfg.backup.retentionCount != null) ''
-      ${pkgs.rclone}/bin/rclone lsf \
-        "r2:$CLOUDFLARE_R2_BUCKET/backups/" \
-        --s3-provider Cloudflare \
-        --s3-access-key-id     "$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-        --s3-secret-access-key "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-        --s3-endpoint          "$CLOUDFLARE_R2_ENDPOINT" \
-        --s3-no-check-bucket \
-      | sort | head -n -${toString cfg.backup.retentionCount} \
-      | while IFS= read -r old; do
-          ${pkgs.rclone}/bin/rclone deletefile \
-            "r2:$CLOUDFLARE_R2_BUCKET/backups/$old" \
-            --s3-provider Cloudflare \
-            --s3-access-key-id     "$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-            --s3-secret-access-key "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-            --s3-endpoint          "$CLOUDFLARE_R2_ENDPOINT" \
-            --s3-no-check-bucket || true
-        done
-    ''}
-
-    echo "✓ backup uploaded: $NAME"
-  '';
-
-  # ── Script: R2 restore ────────────────────────────────────────────────────
-  r2RestoreScript = pkgs.writeShellScript "openclaw-r2-restore" ''
-    set -euo pipefail
-    FILE="''${1:-}"
-    if [ -z "$FILE" ]; then
-      echo "Available backups on R2:"
-      ${pkgs.rclone}/bin/rclone lsf \
-        "r2:''${CLOUDFLARE_R2_BUCKET:?}/backups/" \
-        --s3-provider Cloudflare \
-        --s3-access-key-id     "''${CLOUDFLARE_R2_ACCESS_KEY_ID:?}" \
-        --s3-secret-access-key "''${CLOUDFLARE_R2_SECRET_ACCESS_KEY:?}" \
-        --s3-endpoint          "''${CLOUDFLARE_R2_ENDPOINT:?}" \
-        --s3-no-check-bucket | sort
-      echo ""; echo "Usage: openclaw-restore <filename>"; exit 1
-    fi
-
-    TMP="/tmp/openclaw-restore.tar.zst"
-    ${pkgs.rclone}/bin/rclone copyto \
-      "r2:$CLOUDFLARE_R2_BUCKET/backups/$FILE" "$TMP" \
-      --s3-provider Cloudflare \
-      --s3-access-key-id     "$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-      --s3-secret-access-key "$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-      --s3-endpoint          "$CLOUDFLARE_R2_ENDPOINT" \
-      --s3-no-check-bucket --verbose
-
-    # Safety: snapshot current state before overwriting
-    ${gitTrackScript} || true
-
-    ${pkgs.gnutar}/bin/tar --extract --zstd --file="$TMP" --directory="${cfg.dataDir}"
-    rm -f "$TMP"
-    echo "✓ restored from $FILE — restart openclaw-gateway.service to apply"
-  '';
-
-  # ── Generate models.json from Nix attrset ─────────────────────────────────
-  modelsJson = pkgs.writeText "openclaw-models.json" (
-    builtins.toJSON {
-      models = lib.mapAttrs (
-        _: m:
-        lib.filterAttrs (_: v: v != null) {
-          inherit (m)
-            type
-            modelName
-            endpoint
-            maxTokens
-            temperature
-            ;
-          inherit (m) isDefault extraConfig;
-        }
-      ) cfg.models;
-      defaultModel =
-        if cfg.defaultModel != null then
-          cfg.defaultModel
-        else
-          let
-            d = lib.filterAttrs (_: m: m.isDefault) cfg.models;
-          in
-          if d != { } then
-            builtins.head (builtins.attrNames d)
-          else if cfg.models != { } then
-            builtins.head (builtins.attrNames cfg.models)
-          else
-            null;
-    }
-  );
-
-  # ── Model sub-module type ──────────────────────────────────────────────────
-  modelOpts = lib.types.submodule {
-    options = {
-      type = lib.mkOption {
-        type = lib.types.enum [
-          "anthropic"
-          "openai-compatible"
-          "ollama"
-          "rocm"
-          "remote"
-        ];
-        description = "Backend type for this model.";
-      };
-      modelName = lib.mkOption {
-        type = lib.types.str;
-        description = "Model identifier (e.g. `claude-sonnet-4-20250514`).";
-      };
-      endpoint = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "API endpoint URL.  Leave empty for provider defaults.";
-      };
-      maxTokens = lib.mkOption {
-        type = lib.types.nullOr lib.types.int;
-        default = null;
-      };
-      temperature = lib.mkOption {
-        type = lib.types.nullOr lib.types.float;
-        default = null;
-      };
-      isDefault = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-      };
-      extraConfig = lib.mkOption {
-        type = lib.types.nullOr (lib.types.attrsOf lib.types.str);
-        default = null;
-        description = "Arbitrary extra key-values forwarded to the model config.";
-      };
-    };
+  gitTrackScript = common.mkGitTrackScript {
+    dataDir = cfg.dataDir;
+    scriptName = "openclaw-git-track";
+    environmentFiles = cfg.environmentFiles;
   };
+
+  r2BackupScript = common.mkR2BackupScript {
+    dataDir = cfg.dataDir;
+    gitTrackScript = gitTrackScript;
+    retentionCount = cfg.backup.retentionCount;
+  };
+
+  r2RestoreScript = common.mkR2RestoreScript {
+    dataDir = cfg.dataDir;
+    gitTrackScript = gitTrackScript;
+  };
+
+  modelsJson = common.mkModelsJson cfg.models cfg.defaultModel;
 
 in
 {
@@ -278,7 +110,7 @@ in
 
     # ── Models ───────────────────────────────────────────────────────────────
     models = lib.mkOption {
-      type = lib.types.attrsOf modelOpts;
+      type = lib.types.attrsOf common.modelOpts;
       default = { };
       description = "Declarative AI model backend definitions.";
     };
@@ -519,6 +351,7 @@ in
         OPENCLAW_STATE_DIR = cfg.dataDir;
         OPENCLAW_NIX_MODE = "1";
         OPENCLAW_GATEWAY_PORT = toString cfg.port;
+        OPENCLAW_MODELS_CONFIG = toString modelsJson;
         HOME = cfg.dataDir;
       }
       // lib.optionalAttrs cfg.rocm.enable {
@@ -740,6 +573,7 @@ in
         OPENCLAW_STATE_DIR = cfg.dataDir;
         OPENCLAW_NIX_MODE = "1";
         OPENCLAW_GATEWAY_PORT = toString cfg.port;
+        OPENCLAW_MODELS_CONFIG = toString modelsJson;
         HOME = cfg.dataDir;
       }
       // lib.optionalAttrs cfg.rocm.enable {
@@ -800,74 +634,85 @@ in
       ];
     };
 
-    systemd.user.services.openclaw-xvfb = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
-      description = "Xvfb virtual display for OpenClaw Chrome";
-      before = [ "openclaw-chrome.service" ];
-      wantedBy = [ "default.target" ];
-      serviceConfig = {
-        Type = "simple";
-        ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb :99 -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
-        Restart = "always";
-        RestartSec = "5s";
-      };
-      environment = {
-        HOME = cfg.dataDir;
-      };
-    };
+    systemd.user.services.openclaw-xvfb =
+      lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay)
+        {
+          description = "Xvfb virtual display for OpenClaw Chrome";
+          before = [ "openclaw-chrome.service" ];
+          wantedBy = [ "default.target" ];
+          serviceConfig = {
+            Type = "simple";
+            ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb :99 -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
+            Restart = "always";
+            RestartSec = "5s";
+          };
+          environment = {
+            HOME = cfg.dataDir;
+          };
+        };
 
-    systemd.user.services.openclaw-openbox = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
-      description = "Openbox window manager for OpenClaw Chrome";
-      after = [ "openclaw-xvfb.service" ];
-      requires = [ "openclaw-xvfb.service" ];
-      wantedBy = [ "default.target" ];
-      serviceConfig = {
-        Type = "simple";
-        ExecStart = "${pkgs.openbox}/bin/openbox";
-        Restart = "always";
-        RestartSec = "5s";
-      };
-      environment = {
-        HOME = cfg.dataDir;
-        DISPLAY = ":99";
-      };
-    };
+    systemd.user.services.openclaw-openbox =
+      lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay)
+        {
+          description = "Openbox window manager for OpenClaw Chrome";
+          after = [ "openclaw-xvfb.service" ];
+          requires = [ "openclaw-xvfb.service" ];
+          wantedBy = [ "default.target" ];
+          serviceConfig = {
+            Type = "simple";
+            ExecStart = "${pkgs.openbox}/bin/openbox";
+            Restart = "always";
+            RestartSec = "5s";
+          };
+          environment = {
+            HOME = cfg.dataDir;
+            DISPLAY = ":99";
+          };
+        };
 
-    systemd.user.services.openclaw-tint2 = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
-      description = "Tint2 panel for OpenClaw Chrome";
-      after = [ "openclaw-openbox.service" ];
-      requires = [ "openclaw-openbox.service" ];
-      wantedBy = [ "default.target" ];
-      serviceConfig = {
-        Type = "simple";
-        ExecStart = "${pkgs.tint2}/bin/tint2";
-        Restart = "always";
-        RestartSec = "5s";
-      };
-      environment = {
-        HOME = cfg.dataDir;
-        DISPLAY = ":99";
-      };
-    };
+    systemd.user.services.openclaw-tint2 =
+      lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay)
+        {
+          description = "Tint2 panel for OpenClaw Chrome";
+          after = [ "openclaw-openbox.service" ];
+          requires = [ "openclaw-openbox.service" ];
+          wantedBy = [ "default.target" ];
+          serviceConfig = {
+            Type = "simple";
+            ExecStart = "${pkgs.tint2}/bin/tint2";
+            Restart = "always";
+            RestartSec = "5s";
+          };
+          environment = {
+            HOME = cfg.dataDir;
+            DISPLAY = ":99";
+          };
+        };
 
-    systemd.user.services.openclaw-vnc = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay) {
-      description = "VNC server for OpenClaw Chrome display";
-      after = [ "openclaw-xvfb.service" ];
-      requires = [ "openclaw-xvfb.service" ];
-      wantedBy = [ "default.target" ];
-      serviceConfig = {
-        Type = "simple";
-        ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display :99 -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared";
-        Restart = "always";
-        RestartSec = "5s";
-      };
-      environment = {
-        HOME = cfg.dataDir;
-      };
-    };
+    systemd.user.services.openclaw-vnc =
+      lib.mkIf (cfg.runAsUserServices && cfg.browser.enable && cfg.browser.useVirtualDisplay)
+        {
+          description = "VNC server for OpenClaw Chrome display";
+          after = [ "openclaw-xvfb.service" ];
+          requires = [ "openclaw-xvfb.service" ];
+          wantedBy = [ "default.target" ];
+          serviceConfig = {
+            Type = "simple";
+            ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display :99 -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
+            Restart = "always";
+            RestartSec = "5s";
+          };
+          environment = {
+            HOME = cfg.dataDir;
+          };
+        };
 
     systemd.user.services.openclaw-chrome = lib.mkIf (cfg.runAsUserServices && cfg.browser.enable) {
       description = "Headless Chrome for OpenClaw browser automation";
-      after = [ "network-online.target" ] ++ lib.optional cfg.browser.useVirtualDisplay "openclaw-xvfb.service";
+      after = [
+        "network-online.target"
+      ]
+      ++ lib.optional cfg.browser.useVirtualDisplay "openclaw-xvfb.service";
       wants = [ "network-online.target" ];
       requires = lib.optional cfg.browser.useVirtualDisplay "openclaw-xvfb.service";
       wantedBy = [ "default.target" ];
@@ -878,9 +723,9 @@ in
       '';
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.browser.package}/bin/${
-          cfg.browser.package.meta.mainProgram or "chromium"
-        } ${lib.optionalString (!cfg.browser.useVirtualDisplay) "--headless"} --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
+        ExecStart = "${cfg.browser.package}/bin/${cfg.browser.package.meta.mainProgram or "chromium"} ${
+          lib.optionalString (!cfg.browser.useVirtualDisplay) "--headless"
+        } --remote-debugging-port=${toString cfg.browser.debugPort} --remote-debugging-address=127.0.0.1 --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer --user-data-dir=${cfg.dataDir}/.chrome-profile --load-extension=${cfg.dataDir}/.chrome-extension ${lib.escapeShellArgs cfg.browser.extraArgs}";
         Restart = "always";
         RestartSec = "5s";
       };

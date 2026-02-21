@@ -1,18 +1,14 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # File: flake.nix
+# Description: Flake entry point for nix-openclaw using flake-parts.
 # ═══════════════════════════════════════════════════════════════════════════════
 {
   description = "NixOS and Home-Manager module for deploying OpenClaw securely";
 
   inputs = {
+    flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # OpenClaw application source — override this in your consumer flake.
-    #
-    #   inputs.nix-openclaw.inputs.openclaw-src.url = "github:you/openclaw";
-    #   inputs.nix-openclaw.inputs.openclaw-src.url = "git+ssh://git@github.com/you/private-repo";
-    #   inputs.nix-openclaw.inputs.openclaw-src.url = "path:/path/to/openclaw";
-    #
     openclaw-src = {
       url = "github:openclaw/openclaw";
       flake = false;
@@ -20,59 +16,45 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      openclaw-src,
-      ...
-    }:
+    inputs@{ flake-parts, nixpkgs, ... }:
     let
-      supportedSystems = [
+      forAllSystems = nixpkgs.lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
       ];
-      forAllSystems =
-        fn:
-        nixpkgs.lib.genAttrs supportedSystems (
-          system:
-          fn {
-            inherit system;
-            pkgs = nixpkgs.legacyPackages.${system};
-          }
-        );
-    in
-    {
-      # ── Overlay ────────────────────────────────────────────────────────────────
-      overlays.default = final: _prev: {
-        openclaw = final.callPackage ./package.nix { src = openclaw-src; };
-      };
 
-      # ── Packages ───────────────────────────────────────────────────────────────
+      # Compute packages at flake level so modules can access them
       packages = forAllSystems (
-        { pkgs, ... }:
-        rec {
-          openclaw = pkgs.callPackage ./package.nix { src = openclaw-src; };
-          default = openclaw;
+        system:
+        (nixpkgs.legacyPackages.${system}).callPackage ./package.nix {
+          src = inputs.openclaw-src;
         }
       );
 
-      # ── NixOS Module ──────────────────────────────────────────────────────────
-      nixosModules = rec {
-        openclaw = import ./modules/nixos.nix self;
-        default = openclaw;
+      # Pass to modules via a flake-like attribute set
+      flakeForModules = {
+        packages = packages;
       };
+    in
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
 
-      # ── Home-Manager Module ───────────────────────────────────────────────────
-      homeManagerModules = rec {
-        openclaw = import ./modules/home-manager.nix self;
-        default = openclaw;
-      };
-
-      # ── Dev Shell (for working on this repo itself) ───────────────────────────
-      devShells = forAllSystems (
+      perSystem =
         { pkgs, ... }:
+        let
+          openclaw-pkg = pkgs.callPackage ./package.nix {
+            src = inputs.openclaw-src;
+          };
+        in
         {
-          default = pkgs.mkShell {
+          packages = {
+            openclaw = openclaw-pkg;
+            default = openclaw-pkg;
+          };
+          devShells.default = pkgs.mkShell {
             packages = with pkgs; [
               nodejs_22
               nil
@@ -80,7 +62,24 @@
               git
             ];
           };
-        }
-      );
+        };
+
+      flake = {
+        overlays.default = final: _prev: {
+          openclaw = final.callPackage ./package.nix {
+            src = inputs.openclaw-src;
+          };
+        };
+
+        nixosModules = rec {
+          openclaw = import ./modules/nixos.nix flakeForModules;
+          default = openclaw;
+        };
+
+        homeManagerModules = rec {
+          openclaw = import ./modules/home-manager.nix flakeForModules;
+          default = openclaw;
+        };
+      };
     };
 }

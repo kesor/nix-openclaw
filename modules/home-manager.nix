@@ -13,7 +13,7 @@
 #   • No hardware.graphics / ROCm kernel configuration
 #     (you must configure GPU access at the system level separately)
 # ═══════════════════════════════════════════════════════════════════════════════
-flake:
+flake: # null when imported without flakes
 {
   config,
   lib,
@@ -24,91 +24,19 @@ flake:
 let
   cfg = config.services.openclaw;
 
+  common = import ./common.nix { inherit lib pkgs; };
+
   defaultPackage =
     if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
 
-  # Model sub-module (same definition as the NixOS module)
-  modelOpts = lib.types.submodule {
-    options = {
-      type = lib.mkOption {
-        type = lib.types.enum [
-          "anthropic"
-          "openai-compatible"
-          "ollama"
-          "rocm"
-          "remote"
-        ];
-      };
-      modelName = lib.mkOption { type = lib.types.str; };
-      endpoint = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-      };
-      maxTokens = lib.mkOption {
-        type = lib.types.nullOr lib.types.int;
-        default = null;
-      };
-      temperature = lib.mkOption {
-        type = lib.types.nullOr lib.types.float;
-        default = null;
-      };
-      isDefault = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-      };
-      extraConfig = lib.mkOption {
-        type = lib.types.nullOr (lib.types.attrsOf lib.types.str);
-        default = null;
-      };
-    };
-  };
-
-  modelsJson = pkgs.writeText "openclaw-models.json" (
-    builtins.toJSON {
-      models = lib.mapAttrs (
-        _: m:
-        lib.filterAttrs (_: v: v != null) {
-          inherit (m)
-            type
-            modelName
-            endpoint
-            maxTokens
-            temperature
-            isDefault
-            extraConfig
-            ;
-        }
-      ) cfg.models;
-      defaultModel =
-        if cfg.defaultModel != null then
-          cfg.defaultModel
-        else
-          let
-            d = lib.filterAttrs (_: m: m.isDefault) cfg.models;
-          in
-          if d != { } then builtins.head (builtins.attrNames d) else null;
-    }
-  );
-
   dataDir = cfg.dataDir;
 
-  gitTrackScript = pkgs.writeShellScript "openclaw-hm-git-track" ''
-    set -euo pipefail
-    cd "${dataDir}"
-    if [ ! -d ".git" ]; then
-      ${pkgs.git}/bin/git init
-      ${pkgs.git}/bin/git config user.email "openclaw-tracker@localhost"
-      ${pkgs.git}/bin/git config user.name  "OpenClaw Auto-Tracker"
-      printf '%s\n' logs/ cache/ '*.tmp' node_modules/ .npm/ secrets/ > .gitignore
-      ${pkgs.git}/bin/git add -A
-      ${pkgs.git}/bin/git commit -m "init" --allow-empty
-    fi
-    ${pkgs.git}/bin/git add -A
-    if ! ${pkgs.git}/bin/git diff --cached --quiet 2>/dev/null; then
-      TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-      ${pkgs.git}/bin/git commit -m "auto: $TS"
-    fi
-  '';
+  modelsJson = common.mkModelsJson cfg.models cfg.defaultModel;
+
+  gitTrackScript = common.mkGitTrackScript {
+    inherit dataDir;
+    scriptName = "openclaw-hm-git-track";
+  };
 
 in
 {
@@ -147,7 +75,7 @@ in
     };
 
     models = lib.mkOption {
-      type = lib.types.attrsOf modelOpts;
+      type = lib.types.attrsOf common.modelOpts;
       default = { };
     };
     defaultModel = lib.mkOption {
@@ -176,13 +104,11 @@ in
       }
     ];
 
-    # Ensure data directories exist via activation
     home.activation.openclawDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       mkdir -p "${dataDir}"/{data,config,logs,cache,staging,secrets}
       chmod 700 "${dataDir}/secrets"
     '';
 
-    # ── User service ─────────────────────────────────────────────────────────
     systemd.user.services.openclaw = {
       Unit = {
         Description = "OpenClaw AI Application (user)";
@@ -214,7 +140,6 @@ in
       };
     };
 
-    # ── Git tracking (user timer) ────────────────────────────────────────────
     systemd.user.services.openclaw-git-track = lib.mkIf cfg.gitTracking.enable {
       Unit.Description = "Auto-commit OpenClaw data";
       Service = {
