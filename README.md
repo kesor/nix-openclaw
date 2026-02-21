@@ -4,46 +4,29 @@
 
 # nix-openclaw
 
-A **NixOS** and **Home-Manager** module for deploying
-[OpenClaw](https://github.com/ArekExora/OpenClaw) securely, with declarative
-multi-model AI backend configuration, automatic git-based change tracking, and
-Cloudflare R2 backups.
+A **NixOS** and **Home-Manager** module for deploying [OpenClaw](https://github.com/openclaw/openclaw) securely.
 
-## Features
+## What it does
 
-| Feature | Description |
-|---|---|
-| **Sandboxed service** | systemd hardening — `ProtectSystem=strict`, restricted syscalls, no home access, capability dropping |
-| **Declarative model config** | Define Anthropic, Ollama, ROCm-local, remote (MacBook, etc.), and OpenAI-compatible backends in Nix |
-| **Git change tracking** | A systemd timer auto-commits every change OpenClaw makes, giving you full `git log` / `git diff` history |
-| **R2 backups** | Compressed, timestamped backups to Cloudflare R2 with configurable retention and one-command restore |
-| **ROCm GPU passthrough** | Optional AMD GPU device access for local LLM inference |
-| **NixOS self-management** | Give OpenClaw read-only access to `/etc/nixos` and a proposals directory for suggesting config changes |
-| **Home-Manager support** | Lighter user-level variant for development or non-root environments |
-| **CLI wrappers** | `openclaw-status`, `openclaw-logs`, `openclaw-git`, `openclaw-backup-now`, `openclaw-restore` |
-
----
+- Runs OpenClaw as a sandboxed systemd service
+- Configures AI model backends declaratively (Anthropic, Ollama, ROCm, OpenAI-compatible, remote)
+- Auto-commits all changes to git for full history/diff
+- Pushes compressed backups to Cloudflare R2 with retention
+- Optionally provides AMD GPU access via ROCm
 
 ## Quick Start
 
-### 1 — Add the flake input
-
-In your system `flake.nix`:
+### 1. Add the flake input
 
 ```nix
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-
-    nix-openclaw = {
-      url = "github:YOUR_USER/nix-openclaw";
-      # Optional: pin or override the OpenClaw source
-      # inputs.openclaw-src.url = "github:ArekExora/OpenClaw/some-tag";
-    };
+    nix-openclaw.url = "github:your-org/nix-openclaw";
   };
 
   outputs = { self, nixpkgs, nix-openclaw, ... }: {
-    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.your-host = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
         ./hardware-configuration.nix
@@ -55,62 +38,52 @@ In your system `flake.nix`:
 }
 ```
 
-### 2 — Configure
-
-In `configuration.nix` (or a dedicated file):
+### 2. Configure
 
 ```nix
+# configuration.nix
 { ... }:
 {
   services.openclaw = {
     enable = true;
-
     environmentFiles = [ "/var/lib/openclaw/secrets/env" ];
 
     models.claude-sonnet = {
-      type      = "anthropic";
+      type = "anthropic";
       modelName = "claude-sonnet-4-20250514";
       isDefault = true;
     };
 
     gitTracking.enable = true;
-    backup.enable      = true;
+    backup.enable = true;
   };
 }
 ```
 
-### 3 — Create the secrets file
+### 3. Create secrets file
 
 ```bash
 sudo mkdir -p /var/lib/openclaw/secrets
 sudo tee /var/lib/openclaw/secrets/env > /dev/null << 'EOF'
-# ── Required ──────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY=sk-ant-XXXX
-OPENCLAW_SECRET=some-random-secret-string
+OPENCLAW_SECRET=your-secret-string
 
-# ── R2 Backups (if backup.enable = true) ──────────────────────────────────
+# R2 backups (if backup.enable = true)
 CLOUDFLARE_R2_ACCESS_KEY_ID=XXXX
 CLOUDFLARE_R2_SECRET_ACCESS_KEY=XXXX
 CLOUDFLARE_R2_BUCKET=openclaw-backups
 CLOUDFLARE_R2_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
-
-# ── Optional ──────────────────────────────────────────────────────────────
-# GITHUB_TOKEN=ghp_XXXX
-# REMOTE_MODEL_API_KEY=XXXX
-# OPENAI_API_KEY=sk-XXXX
 EOF
-
-# Lock it down (the service user is created on first `nixos-rebuild`)
 sudo chmod 600 /var/lib/openclaw/secrets/env
 ```
 
-### 4 — Deploy
+### 4. Deploy
 
 ```bash
 sudo nixos-rebuild switch
 ```
 
-### 5 — Verify
+### 5. Verify
 
 ```bash
 openclaw-status
@@ -118,21 +91,129 @@ openclaw-logs
 curl http://127.0.0.1:3000/
 ```
 
-### Options Reference
+## Key Options
 
-`services.openclaw.*`
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enable` | `false` | Enable the OpenClaw service |
+| `package` | (auto when imported via flake; otherwise must be set) | OpenClaw package to use |
+| `user` | `"openclaw"` | System user to run as |
+| `group` | `"openclaw"` | System group |
+| `dataDir` | `"/var/lib/openclaw"` | Data directory |
+| `host` | `"127.0.0.1"` | Bind address |
+| `port` | `3000` | Port |
+| `environmentFiles` | `[]` | Secret env files |
 
-<table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888]"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Option</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Type</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Default</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Description</th></tr></thead><tbody><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">bool</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">false</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Enable the OpenClaw service</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">package</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">package</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><em>(from flake)</em></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">OpenClaw derivation to run</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">user</code> / <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">group</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"openclaw"</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">System account identity</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">dataDir</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">path</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">/var/lib/openclaw</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Root for all persistent state</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">host</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"127.0.0.1"</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Bind address</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">port</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">port</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">3000</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Bind port</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">environmentFiles</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">list of path</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">[]</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">systemd <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">EnvironmentFile=</code> for secrets</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">extraEnvironment</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">attrs</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">{}</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Non-secret env vars</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">models.&lt;name&gt;.*</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">submodule</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">—</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">AI model definitions (see below)</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">defaultModel</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">string?</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">null</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Key into <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">models</code></td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">rocm.enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">bool</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">false</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">AMD GPU passthrough</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">rocm.gfxVersion</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"11.0.0"</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">HSA_OVERRIDE_GFX_VERSION</code></td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">rocm.deviceIds</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">list of string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">["0"]</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Visible GPU indices</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">gitTracking.enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">bool</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">true</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Auto-commit data changes</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">gitTracking.interval</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">calendar</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"*:0/5"</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Commit frequency</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">backup.enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">bool</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">false</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">R2 backups</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">backup.interval</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">calendar</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"hourly"</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Backup frequency</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">backup.retentionCount</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">int?</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">168</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Backups to keep remotely</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">sandbox.enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">bool</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">true</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">systemd hardening</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">sandbox.extraReadPaths</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">list of string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">[]</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Additional read paths</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">sandbox.extraWritePaths</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">list of string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">[]</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Additional write paths</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">nixosConfigDir</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">path?</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">null</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Give OpenClaw read access to NixOS config</td></tr></tbody></table>
+### Models (`services.openclaw.models.<name>.*`)
 
-### Model submodule (`services.openclaw.models.<name>.*`)
+| Option | Type | Description |
+|--------|------|-------------|
+| `type` | enum | Backend: `anthropic`, `openai-compatible`, `ollama`, `rocm`, `remote` |
+| `modelName` | string | Model identifier |
+| `endpoint` | string | API endpoint (optional) |
+| `isDefault` | bool | Set as default model |
+| `maxTokens` | null int | Max tokens (optional) |
+| `temperature` | null float | Temperature (optional) |
+| `extraConfig` | null attrs | Extra config key-values (optional) |
 
-<table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888]"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Option</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Type</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Description</th></tr></thead><tbody><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">type</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">enum</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"anthropic"</code> · <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"openai-compatible"</code> · <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"ollama"</code> · <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"rocm"</code> · <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"remote"</code></td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">modelName</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Model ID (e.g. <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"claude-sonnet-4-20250514"</code>, <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">"llama3.1:70b"</code>)</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">endpoint</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">string</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">API URL (leave <code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">""</code> for provider default)</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">maxTokens</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">int?</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Max response tokens</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">temperature</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">float?</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Sampling temperature</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">isDefault</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">bool</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Mark as default model</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">extraConfig</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">attrs?</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Arbitrary extra key-value pairs forwarded to the app</td></tr></tbody></table>
+### Git Tracking (`services.openclaw.gitTracking.*`)
 
-### Environment Variables (Secrets File)
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enable` | `true` | Enable auto-commit |
+| `interval` | `"*:0/5"` | Timer schedule |
 
+### Backup (`services.openclaw.backup.*`)
 
-Place these in the file referenced by `environmentFiles`:
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enable` | `false` | Enable R2 backups |
+| `interval` | `"hourly"` | Timer schedule |
+| `retentionCount` | `168` | Backups to keep |
 
-<table class="bg-bg-100 min-w-full border-separate border-spacing-0 text-sm leading-[1.88888]"><thead class="border-b-border-100/50 border-b-[0.5px] text-left"><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Variable</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">When needed</th><th class="text-text-000 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Description</th></tr></thead><tbody><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">ANTHROPIC_API_KEY</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Anthropic models</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Anthropic API key</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">OPENCLAW_SECRET</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">Always</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">App-level session/encryption secret</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">CLOUDFLARE_R2_ACCESS_KEY_ID</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">backup.enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">R2 API token key</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">CLOUDFLARE_R2_SECRET_ACCESS_KEY</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"><code class="bg-bg-300 text-accent-secondary-000 whitespace-pre-wrap rounded-[0.3rem] px-1 py-px text-[0.95em]">backup.enable</code></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">R2 API token secret</td></tr><tr class="[tbody&gt;&amp;]:odd:bg-bg-500/10"><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]">`CLOUDFLARE_R2_BUCKET</td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"></td><td class="border-t-border-100/50 [&amp;:not(:first-child)]:-x-[hsla(var(--border-100) / 0.5)] border-t-[0.5px] px-2 [&amp;:not(:first-child)]:border-l-[0.5px]"></td></tr></tbody></table>
+### Tuning (`services.openclaw.tuning.*`)
 
+| Option | Default | Description |
+|--------|---------|-------------|
+| `restart.limitBurst` | `5` | Max restarts before stopping |
+| `restart.limitInterval` | `300` | Restart window (seconds) |
+| `restart.sec` | `5` | Seconds before restart |
+| `resources.maxMemory` | `"8G"` | Memory limit |
+| `resources.maxFiles` | `65536` | Max open files |
+| `resources.cpuQuota` | `"400%"` | CPU limit (4 cores) |
+| `gitTracking.randomDelay` | `30` | Random delay (seconds) |
+| `backup.randomDelay` | `300` | Random delay (seconds) |
+| `status.logLines` | `25` | Log lines in status |
+| `status.gitLogLines` | `10` | Git commits in status |
 
+### Browser (`services.openclaw.browser.*`)
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enable` | `false` | Enable browser automation |
+| `useVirtualDisplay` | `false` | Use Xvfb instead of headless |
+| `displayNumber` | `":99"` | Xvfb display |
+| `displayResolution` | `"2560x1440x24"` | Virtual resolution |
+| `vncPort` | `5900` | VNC port |
+| `vncPassword` | `null` | VNC password (null = no password, local users can connect without auth) |
+
+## CLI Tools
+
+- `openclaw` - Run commands as the openclaw user
+- `openclaw-status` - Show service status
+- `openclaw-logs` - Follow logs
+- `openclaw-git` - Git operations
+- `openclaw-backup-now` - Trigger backup
+- `openclaw-restore <file>` - Restore from R2
+
+## Home-Manager
+
+For non-root or standalone Home-Manager use (adds options under `services.openclaw`):
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nix-openclaw.url = "github:your-org/nix-openclaw";
+  };
+
+  outputs = { self, nixpkgs, nix-openclaw, home-manager, ... }: {
+    homeConfigurations."user@hostname" = home-manager.lib.homeManagerConfiguration {
+      modules = [
+        nix-openclaw.homeManagerModules.default
+        ./home.nix
+      ];
+    };
+  };
+}
+```
+
+```nix
+# home.nix
+{ lib, ... }:
+{
+  services.openclaw = {
+    enable = true;
+    # ... available options: enable, package, dataDir, host, port,
+    #    environmentFiles, extraEnvironment, models, defaultModel,
+    #    gitTracking, tuning (restart.sec, gitTracking.randomDelay, status.logLines)
+  };
+}
+```
+
+## Environment Variables
+
+Place in your secrets file (via `environmentFiles`):
+
+| Variable | When needed | Description |
+|----------|--------------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic models | Anthropic API key |
+| `OPENCLAW_SECRET` | Always | Authentication secret |
+| `OPENAI_API_KEY` | OpenAI models | OpenAI API key |
+| `ANTHROPIC_BASE_URL` | Custom endpoint | Override Anthropic endpoint |
+| `OPENAI_BASE_URL` | Custom endpoint | Override OpenAI endpoint |
+| `CLOUDFLARE_R2_ACCESS_KEY_ID` | `backup.enable = true` | R2 API key ID |
+| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | `backup.enable = true` | R2 API secret |
+| `CLOUDFLARE_R2_BUCKET` | `backup.enable = true` | R2 bucket name |
+| `CLOUDFLARE_R2_ENDPOINT` | `backup.enable = true` | R2 endpoint URL |
