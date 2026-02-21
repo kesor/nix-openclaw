@@ -58,7 +58,7 @@ in
     };
 
     packageOverride = lib.mkOption {
-      type = lib.types.nullOr lib.types.functionTo lib.types.package;
+      type = lib.types.nullOr (lib.types.functionTo lib.types.package);
       default = null;
       description = ''
         Function to override the package built from flake.
