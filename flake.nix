@@ -36,6 +36,7 @@
 
       # Pass to modules via a flake-like attribute set
       flakeForModules = {
+        inherit mkOpenclawPackage;
         packages = packages;
         openclawSrc = inputs.openclaw-src;
       };

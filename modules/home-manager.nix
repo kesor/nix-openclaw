@@ -53,9 +53,8 @@ in
 
     package = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
-      default =
-        if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
-      description = "OpenClaw package to use. Defaults to flake's package.";
+      default = null;
+      description = "OpenClaw package to use. When set, pnpmDepsHash and packageOverride are ignored.";
     };
 
     packageOverride = lib.mkOption {
@@ -63,6 +62,12 @@ in
       default = null;
       description = ''
         Function to override the package built from flake.
+        Example:
+        ```nix
+        services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
+          patches = [ ./my-fix.patch ];
+        });
+        ```
       '';
     };
 
