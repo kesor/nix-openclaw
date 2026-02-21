@@ -14,7 +14,8 @@
 let
   modelOpts = import ../lib/models.nix { inherit lib; };
 
-  mkS3Config = storageProvider:
+  mkS3Config =
+    storageProvider:
     let
       s3Provider =
         {
@@ -27,7 +28,7 @@ let
     in
     {
       s3ProviderFlag = lib.optionalString (s3Provider != "") "--s3-provider ${s3Provider}";
-      bucket = "''${OPENCLAW_S3_BUCKET:?}/backups";
+      bucket = "\${OPENCLAW_S3_BUCKET:?}/backups";
     };
 
   mkModelsJson =

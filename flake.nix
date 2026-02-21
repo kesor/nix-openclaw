@@ -49,9 +49,7 @@
       perSystem =
         { pkgs, ... }:
         let
-          openclaw-pkg = pkgs.callPackage ./package.nix {
-            src = inputs.openclaw-src;
-          };
+          openclaw-pkg = pkgs.callPackage ./package.nix { src = inputs.openclaw-src; };
         in
         {
           packages = {
@@ -70,9 +68,7 @@
 
       flake = {
         overlays.default = final: _prev: {
-          openclaw = final.callPackage ./package.nix {
-            src = inputs.openclaw-src;
-          };
+          openclaw = final.callPackage ./package.nix { src = inputs.openclaw-src; };
         };
 
         nixosModules = rec {

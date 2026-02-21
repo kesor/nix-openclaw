@@ -446,9 +446,7 @@ in
         "d ${cfg.dataDir}/staging    0750 ${o} ${g} -"
         "d ${cfg.dataDir}/secrets    0700 ${o} ${g} -"
       ]
-      ++ lib.optionals (cfg.browser.vncPassword != null) [
-        "d ${cfg.dataDir}/.vnc      0700 ${o} ${g} -"
-      ]
+      ++ lib.optionals (cfg.browser.vncPassword != null) [ "d ${cfg.dataDir}/.vnc      0700 ${o} ${g} -" ]
       ++ lib.optionals (cfg.nixosConfigDir != null) [
         "d ${cfg.dataDir}/nixos-proposals 0750 ${o} ${g} -"
       ]
