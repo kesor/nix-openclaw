@@ -32,7 +32,7 @@
         };
 
       # Default packages (uses fakeHash from package.nix by default)
-      packages = forAllSystems (system: mkOpenclawPackage system null);
+      packages = forAllSystems (system: mkOpenclawPackage system nixpkgs.lib.fakeHash);
 
       # Pass to modules via a flake-like attribute set
       flakeForModules = {

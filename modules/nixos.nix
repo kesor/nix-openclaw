@@ -23,6 +23,12 @@ let
 
   common = import ./common.nix { inherit lib pkgs; };
 
+  openclawPackage =
+    if cfg.package != null then
+      cfg.package
+    else
+      flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
+
   gitTrackScript = common.mkGitTrackScript {
     dataDir = cfg.dataDir;
     scriptName = "openclaw-git-track";
@@ -379,7 +385,7 @@ in
         "video"
         "render"
       ];
-      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ cfg.package ]);
+      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ openclawPackage ]);
     };
     users.groups.${cfg.group} = { };
 
@@ -476,7 +482,7 @@ in
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package}/bin/openclaw-gateway";
+        ExecStart = "${openclawPackage}/bin/openclaw-gateway";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
@@ -619,7 +625,7 @@ in
         set -a
         ${lib.concatMapStringsSep "\n" (f: "source ${f} 2>/dev/null || true") cfg.environmentFiles}
         set +a
-        exec sudo -u ${cfg.user} ${cfg.package}/bin/openclaw "$@"
+        exec sudo -u ${cfg.user} ${openclawPackage}/bin/openclaw "$@"
       '')
 
       (pkgs.writeShellScriptBin "openclaw-status" ''
@@ -702,7 +708,7 @@ in
       // cfg.extraEnvironment;
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.package}/bin/openclaw-gateway";
+        ExecStart = "${openclawPackage}/bin/openclaw-gateway";
         Restart = "always";
         RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
@@ -837,7 +843,7 @@ in
       wantedBy = [ "default.target" ];
       preStart = ''
         mkdir -p ${cfg.dataDir}/.chrome-extension
-        cp -r ${cfg.package}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
+        cp -r ${openclawPackage}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
         chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}/.chrome-extension
       '';
       serviceConfig = {
