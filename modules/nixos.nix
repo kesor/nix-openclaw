@@ -30,7 +30,15 @@ let
       let
         base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
       in
-      if cfg.packageOverride != null then cfg.packageOverride base else base
+      if cfg.packageOverride != null then
+        if builtins.isFunction cfg.packageOverride then
+          cfg.packageOverride base
+        else if lib.isDerivation cfg.packageOverride then
+          cfg.packageOverride
+        else
+          base.override cfg.packageOverride
+      else
+        base
     else
       throw "services.openclaw requires flake to be used";
 
@@ -70,16 +78,35 @@ in
     };
 
     packageOverride = lib.mkOption {
-      type = lib.types.nullOr (lib.types.functionTo lib.types.package);
+      type = lib.types.nullOr (
+        lib.types.oneOf [
+          lib.types.attrs
+          (lib.types.functionTo lib.types.package)
+          lib.types.package
+        ]
+      );
       default = null;
       description = ''
-        Function to override the package built from flake.
-        Example:
-        ```nix
-        services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
-          patches = [ ./my-fix.patch ];
-        });
-        ```
+        Override the package. Use:
+        - Attrs to override package function parameters:
+          ```nix
+          services.openclaw.packageOverride = {
+            nodejs = pkgs.nodejs_20;
+          };
+          ```
+        - Or a function to modify the package:
+          ```nix
+          services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
+            patches = [ ./my-fix.patch ];
+          });
+          ```
+        - Chain both by using a function:
+          ```nix
+          services.openclaw.packageOverride = pkg:
+            (pkg.override { nodejs = pkgs.nodejs_20; }).overrideAttrs (old: {
+              patches = [ ./my-fix.patch ];
+            });
+          ```
       '';
     };
 
