@@ -73,12 +73,11 @@ in
     };
 
     pnpmDepsHash = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
+      type = lib.types.str;
+      default = lib.fakeHash;
       description = ''
-        SHA256 hash of pnpm dependencies. Set this to the correct hash
-        to avoid fetch errors. Run `nix build` first to get the expected hash.
-        When null (default), uses the flake's default package.
+        SHA256 hash of pnpm dependencies. Run `nix build` first
+        to get the expected hash error with the correct value.
       '';
     };
 
