@@ -61,13 +61,11 @@ in
       type = lib.types.nullOr lib.types.attrs;
       default = null;
       description = ''
-        Attrs to override package parameters.
+        Attrs to override package function parameters.
         Example:
         ```nix
         services.openclaw.packageOverride = {
-          esbuild = pkgs.esbuild.overrideAttrs (old: {
-            buildFlags = old.buildFlags ++ ["--some-flag"];
-          });
+          nodejs = pkgs.nodejs_20;
         };
         ```
       '';

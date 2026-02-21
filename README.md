@@ -182,23 +182,20 @@ nix build .#openclaw --override-input openclaw-src github:username/openclaw
 
 ### Customizing the package
 
-To override package parameters:
+To override package parameters (like `nodejs`, `esbuild`, `pnpm`, etc.):
 
 ```nix
 services.openclaw.packageOverride = {
-  esbuild = pkgs.esbuild.overrideAttrs (old: {
-    buildFlags = old.buildFlags ++ ["--some-flag"];
-  });
+  nodejs = pkgs.nodejs_20;
 };
 ```
 
-Or to add patches:
+Or to override multiple parameters:
 
 ```nix
 services.openclaw.packageOverride = {
-  pnpmDeps = pkgs.pnpm.fetchDeps.overrideAttrs (old: {
-    # patches to apply
-  });
+  nodejs = pkgs.nodejs_20;
+  esbuild = pkgs.esbuild.override { singleThreaded = true; };
 };
 ```
 
