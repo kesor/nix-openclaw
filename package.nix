@@ -2,7 +2,6 @@
   lib,
   stdenv,
   nodejs_22,
-  pnpm,
   pnpmConfigHook,
   fetchPnpmDeps,
   makeWrapper,
@@ -19,12 +18,10 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     nodejs_22
-    pnpm
+    pnpmConfigHook
     makeWrapper
     bun
   ];
-
-  inherit pnpmConfigHook;
 
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
