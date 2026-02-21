@@ -67,7 +67,7 @@ let
       fi
 
       ${lib.optionalString (environmentFiles != [ ]) ''
-        # Source environment files for R2 credentials
+        # Source optional environment files
         ${lib.concatMapStringsSep "\n" (f: "source ${f} 2>/dev/null || true") environmentFiles}
       ''}
 
