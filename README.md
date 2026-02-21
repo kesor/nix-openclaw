@@ -190,13 +190,20 @@ services.openclaw.packageOverride = {
 };
 ```
 
-Or to override multiple parameters:
+Or to use a function to modify the package (e.g., add patches):
 
 ```nix
-services.openclaw.packageOverride = {
-  nodejs = pkgs.nodejs_20;
-  esbuild = pkgs.esbuild.override { singleThreaded = true; };
-};
+services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
+  patches = [ ./my-fix.patch ];
+});
+```
+
+To use both, chain them:
+
+```nix
+services.openclaw.packageOverride =
+  (pkgs.callPackage ./package.nix { }).override { nodejs = pkgs.nodejs_20; }
+    .overrideAttrs (old: { patches = [ ./my-fix.patch ]; });
 ```
 
 ## CLI Tools
