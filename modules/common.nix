@@ -108,6 +108,7 @@ let
     in
     pkgs.writeShellScript "openclaw-backup" ''
       set -euo pipefail
+      : "''${OPENCLAW_S3_BUCKET:?must be set}"
       NAME="openclaw-$(date -u +%Y%m%d-%H%M%S).tar.zst"
       TMP="/tmp/$NAME"
 
@@ -149,6 +150,7 @@ let
     in
     pkgs.writeShellScript "openclaw-restore" ''
       set -euo pipefail
+      : "''${OPENCLAW_S3_BUCKET:?must be set}"
 
       FILE="''${1:-}"
       if [ -z "$FILE" ]; then
@@ -165,9 +167,9 @@ let
       TMP="/tmp/openclaw-restore.tar.zst"
       ${pkgs.rclone}/bin/rclone copyto \
         "${bucketPath}/$FILE" "$TMP" \
-        --s3-access-key-id     "$OPENCLAW_S3_ACCESS_KEY_ID" \
-        --s3-secret-access-key "$OPENCLAW_S3_SECRET_ACCESS_KEY" \
-        --s3-endpoint          "$OPENCLAW_S3_ENDPOINT" \
+        --s3-access-key-id     "''${OPENCLAW_S3_ACCESS_KEY_ID:?}" \
+        --s3-secret-access-key "''${OPENCLAW_S3_SECRET_ACCESS_KEY:?}" \
+        --s3-endpoint          "''${OPENCLAW_S3_ENDPOINT:?}" \
         --s3-no-check-bucket --verbose
 
       ${lib.optionalString (gitTrackScript != null) ''

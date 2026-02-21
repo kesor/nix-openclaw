@@ -586,7 +586,7 @@ in
 
     # ── R2 backup ────────────────────────────────────────────────────────────
     systemd.services.openclaw-backup = lib.mkIf (!cfg.runAsUserServices && cfg.backup.enable) {
-      description = "Backup OpenClaw data to Cloudflare R2";
+      description = "Backup OpenClaw data to S3-compatible storage";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       serviceConfig = {
@@ -739,7 +739,7 @@ in
         };
 
     systemd.user.services.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
-      description = "Backup OpenClaw data to Cloudflare R2";
+      description = "Backup OpenClaw data to S3-compatible storage";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       serviceConfig = {
@@ -873,7 +873,7 @@ in
         };
 
     systemd.user.timers.openclaw-backup = lib.mkIf (cfg.runAsUserServices && cfg.backup.enable) {
-      description = "Backup OpenClaw data to Cloudflare R2";
+      description = "Backup OpenClaw data to S3-compatible storage";
       timerConfig = {
         OnCalendar = cfg.backup.interval;
         Persistent = true;
