@@ -96,7 +96,7 @@ curl http://127.0.0.1:3000/
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enable` | `false` | Enable the OpenClaw service |
-| `package` | (auto) | OpenClaw package to use |
+| `package` | (auto when imported via flake; otherwise must be set) | OpenClaw package to use |
 | `user` | `"openclaw"` | System user to run as |
 | `group` | `"openclaw"` | System group |
 | `dataDir` | `"/var/lib/openclaw"` | Data directory |
@@ -112,8 +112,9 @@ curl http://127.0.0.1:3000/
 | `modelName` | string | Model identifier |
 | `endpoint` | string | API endpoint (optional) |
 | `isDefault` | bool | Set as default model |
-| `maxTokens` | int | Max tokens (optional) |
-| `temperature` | float | Temperature (optional) |
+| `maxTokens` | null int | Max tokens (optional) |
+| `temperature` | null float | Temperature (optional) |
+| `extraConfig` | null attrs | Extra config key-values (optional) |
 
 ### Git Tracking (`services.openclaw.gitTracking.*`)
 
@@ -154,7 +155,7 @@ curl http://127.0.0.1:3000/
 | `displayNumber` | `":99"` | Xvfb display |
 | `displayResolution` | `"2560x1440x24"` | Virtual resolution |
 | `vncPort` | `5900` | VNC port |
-| `vncPassword` | `null` | VNC password (optional) |
+| `vncPassword` | `null` | VNC password (null = no password, local users can connect without auth) |
 
 ## CLI Tools
 
@@ -167,22 +168,41 @@ curl http://127.0.0.1:3000/
 
 ## Home-Manager
 
-For non-root or development use:
+For non-root or standalone Home-Manager use (adds options under `services.openclaw`):
 
 ```nix
-# home.nix
-{ pkgs, ... }:
+# flake.nix
 {
-  imports = [ nix-openclaw.homeManagerModules.default ];
-  
-  services.openclaw = {
-    enable = true;
-    # ... same options as NixOS module
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nix-openclaw.url = "github:your-org/nix-openclaw";
+  };
+
+  outputs = { self, nixpkgs, nix-openclaw, home-manager, ... }: {
+    homeConfigurations."user@hostname" = home-manager.lib.homeManagerConfiguration {
+      modules = [
+        nix-openclaw.homeManagerModules.default
+        ./home.nix
+      ];
+    };
   };
 }
 ```
 
-## Required Environment Variables
+```nix
+# home.nix
+{ lib, ... }:
+{
+  services.openclaw = {
+    enable = true;
+    # ... available options: enable, package, dataDir, host, port,
+    #    environmentFiles, extraEnvironment, models, defaultModel,
+    #    gitTracking, tuning (restart.sec, gitTracking.randomDelay, status.logLines)
+  };
+}
+```
+
+## Environment Variables
 
 Place in your secrets file (via `environmentFiles`):
 
@@ -193,3 +213,7 @@ Place in your secrets file (via `environmentFiles`):
 | `OPENAI_API_KEY` | OpenAI models | OpenAI API key |
 | `ANTHROPIC_BASE_URL` | Custom endpoint | Override Anthropic endpoint |
 | `OPENAI_BASE_URL` | Custom endpoint | Override OpenAI endpoint |
+| `CLOUDFLARE_R2_ACCESS_KEY_ID` | `backup.enable = true` | R2 API key ID |
+| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | `backup.enable = true` | R2 API secret |
+| `CLOUDFLARE_R2_BUCKET` | `backup.enable = true` | R2 bucket name |
+| `CLOUDFLARE_R2_ENDPOINT` | `backup.enable = true` | R2 endpoint URL |
