@@ -27,7 +27,7 @@ let
     if flake != null then flake.packages.${pkgs.stdenv.hostPlatform.system}.openclaw else null;
 
   packageOverride =
-    if flake != null && cfg.pnpmDepsHash != null then
+    if flake != null then
       flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash
     else
       cfg.package;
