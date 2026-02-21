@@ -19,6 +19,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     nodejs_22
+    pnpm
     makeWrapper
     bun
   ];
