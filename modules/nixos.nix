@@ -258,6 +258,75 @@ in
         default = "2560x1440x24";
         description = "Virtual display resolution (when useVirtualDisplay is enabled)";
       };
+      displayNumber = lib.mkOption {
+        type = lib.types.str;
+        default = ":99";
+        description = "Xvfb display number for virtual display mode";
+      };
+    };
+
+    # ── Tuning / Performance ───────────────────────────────────────────────────
+    tuning = {
+      restart = {
+        limitBurst = lib.mkOption {
+          type = lib.types.int;
+          default = 5;
+          description = "StartLimitBurst - max restarts within interval before stopping";
+        };
+        limitInterval = lib.mkOption {
+          type = lib.types.int;
+          default = 300;
+          description = "StartLimitIntervalSec - time window for restart limits (seconds)";
+        };
+        sec = lib.mkOption {
+          type = lib.types.int;
+          default = 5;
+          description = "RestartSec - seconds to wait before restarting";
+        };
+      };
+      resources = {
+        maxMemory = lib.mkOption {
+          type = lib.types.str;
+          default = "8G";
+          description = "MemoryMax - maximum memory the service can use";
+        };
+        maxFiles = lib.mkOption {
+          type = lib.types.int;
+          default = 65536;
+          description = "LimitNOFILE - maximum number of open files";
+        };
+        cpuQuota = lib.mkOption {
+          type = lib.types.str;
+          default = "400%";
+          description = "CPUQuota - CPU time limit (percentage of one CPU)";
+        };
+      };
+      gitTracking = {
+        randomDelay = lib.mkOption {
+          type = lib.types.int;
+          default = 30;
+          description = "RandomizedDelaySec - random delay before git auto-commit (seconds)";
+        };
+      };
+      backup = {
+        randomDelay = lib.mkOption {
+          type = lib.types.int;
+          default = 300;
+          description = "RandomizedDelaySec - random delay before backup (seconds)";
+        };
+      };
+      status = {
+        logLines = lib.mkOption {
+          type = lib.types.int;
+          default = 25;
+          description = "Number of log lines to show in openclaw-status";
+        };
+        gitLogLines = lib.mkOption {
+          type = lib.types.int;
+          default = 10;
+          description = "Number of git commits to show in openclaw-status";
+        };
+      };
     };
   };
 
@@ -371,20 +440,24 @@ in
         Group = cfg.group;
         ExecStart = "${cfg.package}/bin/openclaw-gateway";
         Restart = "always";
-        RestartSec = 5;
+        RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
 
         EnvironmentFile = cfg.environmentFiles;
 
         # ── Resource limits ──────────────────────────────────────────────
-        LimitNOFILE = 65536;
-        MemoryMax = "8G";
-        CPUQuota = "400%";
+        LimitNOFILE = cfg.tuning.resources.maxFiles;
+        MemoryMax = cfg.tuning.resources.maxMemory;
+        CPUQuota = cfg.tuning.resources.cpuQuota;
 
         # ── Logging ──────────────────────────────────────────────────────
         StandardOutput = "journal";
         StandardError = "journal";
         SyslogIdentifier = "openclaw";
+
+        # ── Restart limits ────────────────────────────────────────────────
+        StartLimitBurst = cfg.tuning.restart.limitBurst;
+        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
       }
       # ── Security hardening (conditional) ─────────────────────────────────
       // lib.optionalAttrs cfg.sandbox.enable {
@@ -466,7 +539,7 @@ in
       timerConfig = {
         OnCalendar = cfg.gitTracking.interval;
         Persistent = true;
-        RandomizedDelaySec = 30;
+        RandomizedDelaySec = cfg.tuning.gitTracking.randomDelay;
       };
     };
 
@@ -502,7 +575,7 @@ in
       timerConfig = {
         OnCalendar = cfg.backup.interval;
         Persistent = true;
-        RandomizedDelaySec = 300;
+        RandomizedDelaySec = cfg.tuning.backup.randomDelay;
       };
     };
 
@@ -520,15 +593,15 @@ in
         echo "══ service ══"
         systemctl status openclaw-gateway.service --no-pager 2>&1 || true
         echo ""
-        echo "══ last 25 log lines ══"
-        journalctl -u openclaw-gateway.service -n 25 --no-pager 2>&1 || true
+        echo "══ last ${toString cfg.tuning.status.logLines} log lines ══"
+        journalctl -u openclaw-gateway.service -n ${toString cfg.tuning.status.logLines} --no-pager 2>&1 || true
         echo ""
         echo "══ disk usage ══"
         du -sh ${cfg.dataDir}/*/ 2>/dev/null || echo "(empty)"
         ${lib.optionalString cfg.gitTracking.enable ''
           echo ""
-          echo "══ git log (last 10) ══"
-          cd ${cfg.dataDir} && ${pkgs.git}/bin/git log --oneline -10 2>/dev/null || echo "(no commits)"
+          echo "══ git log (last ${toString cfg.tuning.status.gitLogLines}) ══"
+          cd ${cfg.dataDir} && ${pkgs.git}/bin/git log --oneline -${toString cfg.tuning.status.gitLogLines} 2>/dev/null || echo "(no commits)"
         ''}
       '')
 
@@ -590,15 +663,19 @@ in
         Type = "simple";
         ExecStart = "${cfg.package}/bin/openclaw-gateway";
         Restart = "always";
-        RestartSec = 5;
+        RestartSec = cfg.tuning.restart.sec;
         WorkingDirectory = cfg.dataDir;
         EnvironmentFile = cfg.environmentFiles;
-        LimitNOFILE = 65536;
-        MemoryMax = "8G";
-        CPUQuota = "400%";
+        LimitNOFILE = cfg.tuning.resources.maxFiles;
+        MemoryMax = cfg.tuning.resources.maxMemory;
+        CPUQuota = cfg.tuning.resources.cpuQuota;
         StandardOutput = "journal";
         StandardError = "journal";
         SyslogIdentifier = "openclaw";
+
+        # ── Restart limits ────────────────────────────────────────────────
+        StartLimitBurst = cfg.tuning.restart.limitBurst;
+        StartLimitIntervalSec = cfg.tuning.restart.limitInterval;
       };
     };
 
@@ -642,7 +719,7 @@ in
           wantedBy = [ "default.target" ];
           serviceConfig = {
             Type = "simple";
-            ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb :99 -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
+            ExecStart = "${pkgs.xorg.xorgserver}/bin/Xvfb ${cfg.browser.displayNumber} -screen 0 ${cfg.browser.displayResolution} -nolisten tcp -br";
             Restart = "always";
             RestartSec = "5s";
           };
@@ -666,7 +743,7 @@ in
           };
           environment = {
             HOME = cfg.dataDir;
-            DISPLAY = ":99";
+            DISPLAY = cfg.browser.displayNumber;
           };
         };
 
@@ -685,7 +762,7 @@ in
           };
           environment = {
             HOME = cfg.dataDir;
-            DISPLAY = ":99";
+            DISPLAY = cfg.browser.displayNumber;
           };
         };
 
@@ -698,7 +775,7 @@ in
           wantedBy = [ "default.target" ];
           serviceConfig = {
             Type = "simple";
-            ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display :99 -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
+            ExecStart = "${pkgs.x11vnc}/bin/x11vnc -display ${cfg.browser.displayNumber} -nopw -forever -rfbport ${toString cfg.browser.vncPort} -shared -localhost";
             Restart = "always";
             RestartSec = "5s";
           };
@@ -741,7 +818,7 @@ in
           timerConfig = {
             OnCalendar = cfg.gitTracking.interval;
             Persistent = true;
-            RandomizedDelaySec = 30;
+            RandomizedDelaySec = cfg.tuning.gitTracking.randomDelay;
           };
           wantedBy = [ "timers.target" ];
         };
@@ -751,7 +828,7 @@ in
       timerConfig = {
         OnCalendar = cfg.backup.interval;
         Persistent = true;
-        RandomizedDelaySec = 300;
+        RandomizedDelaySec = cfg.tuning.backup.randomDelay;
       };
       wantedBy = [ "timers.target" ];
     };
