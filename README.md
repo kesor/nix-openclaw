@@ -96,7 +96,8 @@ curl http://127.0.0.1:3000/
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enable` | `false` | Enable the OpenClaw service |
-| `package` | (auto when imported via flake; otherwise must be set) | OpenClaw package to use |
+| `package` | (flake's package) | OpenClaw package to use |
+| `pnpmDepsHash` | `lib.fakeHash` | SHA256 hash of pnpm dependencies (set to correct hash after first build) |
 | `user` | `"openclaw"` | System user to run as |
 | `group` | `"openclaw"` | System group |
 | `dataDir` | `"/var/lib/openclaw"` | Data directory |
@@ -157,6 +158,26 @@ curl http://127.0.0.1:3000/
 | `displayResolution` | `"2560x1440x24"` | Virtual resolution |
 | `vncPort` | `5900` | VNC port |
 | `vncPassword` | `null` | VNC password (null = no password, local users can connect without auth) |
+
+## Building
+
+The first build will fail with the correct hash for pnpm dependencies. Use the hash from the error message in your configuration:
+
+```nix
+services.openclaw.pnpmDepsHash = "sha256-XXXXXXXX";
+```
+
+### Overriding the source
+
+To use a different OpenClaw source (local path, fork, etc.):
+
+```bash
+# From a local path
+nix build .#openclaw --override-input openclaw-src /path/to/openclaw
+
+# From a different repository
+nix build .#openclaw --override-input openclaw-src github:username/openclaw
+```
 
 ## CLI Tools
 
