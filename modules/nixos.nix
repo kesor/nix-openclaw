@@ -26,30 +26,25 @@ let
   openclawPackage =
     if cfg.package != null then
       cfg.package
-    else if flake != null then
+    else if flake == null then
+      throw "services.openclaw requires flake to be used (or set services.openclaw.package explicitly)"
+    else
       let
         base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
       in
-      if cfg.packageOverride != null then
-        if builtins.isFunction cfg.packageOverride then
-          let
-            # Wrap in makeOverridable so function can use .override and .overrideAttrs
-            overridableBase = base;
-            overridden = cfg.packageOverride overridableBase;
-          in
-          overridden
-        else if lib.isDerivation cfg.packageOverride then
-          cfg.packageOverride
-        else
-          let
-            overrideInputs = cfg.packageOverride.overrideInputs or { };
-            overrideAttrsFn = cfg.packageOverride.overrideAttrs or (_: { });
-          in
-          (base.override overrideInputs).overrideAttrs overrideAttrsFn
-      else
+      if cfg.packageOverride == null then
         base
-    else
-      throw "services.openclaw requires flake to be used";
+      else if lib.isFunction cfg.packageOverride then
+        cfg.packageOverride base
+      else if lib.isDerivation cfg.packageOverride then
+        cfg.packageOverride
+      else
+        throw ''
+          services.openclaw.packageOverride must be:
+          - null
+          - a derivation (package)
+          - or a function (pkg: ...) that returns a derivation
+        '';
 
   gitTrackScript = common.mkGitTrackScript {
     dataDir = cfg.dataDir;
@@ -89,33 +84,13 @@ in
     packageOverride = lib.mkOption {
       type = lib.types.nullOr (
         lib.types.oneOf [
-          lib.types.attrs
-          (lib.types.functionTo lib.types.package)
           lib.types.package
+          (lib.types.functionTo lib.types.package)
         ]
       );
       default = null;
       description = ''
-        Override the package. Use:
-        - Attrs to override package function parameters:
-          ```nix
-          services.openclaw.packageOverride = {
-            nodejs = pkgs.nodejs_20;
-          };
-          ```
-        - Or a function to modify the package:
-          ```nix
-          services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
-            patches = [ ./my-fix.patch ];
-          });
-          ```
-        - Chain both by using a function:
-          ```nix
-          services.openclaw.packageOverride = pkg:
-            (pkg.override { nodejs = pkgs.nodejs_20; }).overrideAttrs (old: {
-              patches = [ ./my-fix.patch ];
-            });
-          ```
+        Override the OpenClaw package.
       '';
     };
 
