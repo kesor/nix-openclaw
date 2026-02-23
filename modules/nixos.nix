@@ -36,18 +36,26 @@ let
         base
       else if lib.isFunction cfg.packageOverride then
         let
-          # Wrap in makeOverridable so user can use .override and .overrideAttrs
+          # Wrap in makeOverridable so user can use .overrideAttrs
           overridable = lib.makeOverridable (args: base) { };
         in
         cfg.packageOverride overridable
       else if lib.isDerivation cfg.packageOverride then
         cfg.packageOverride
+      else if cfg.packageOverride ? overrideInputs || cfg.packageOverride ? overrideAttrs then
+        # Attrs form: support overrideInputs and overrideAttrs
+        let
+          overridable = lib.makeOverridable (args: base) { };
+          withInputs = overridable.override (cfg.packageOverride.overrideInputs or { });
+        in
+        withInputs.overrideAttrs (cfg.packageOverride.overrideAttrs or (_: { }))
       else
         throw ''
           services.openclaw.packageOverride must be:
           - null
           - a derivation (package)
-          - or a function (pkg: ...) that returns a derivation
+          - a function (pkg: ...) that returns a derivation
+          - or attrs with overrideInputs and/or overrideAttrs
         '';
 
   gitTrackScript = common.mkGitTrackScript {

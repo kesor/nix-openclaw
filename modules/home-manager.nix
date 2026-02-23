@@ -35,15 +35,22 @@ let
       in
       if cfg.packageOverride != null then
         if builtins.isFunction cfg.packageOverride then
-          cfg.packageOverride base
+          let
+            # Wrap in makeOverridable so user can use .overrideAttrs
+            overridable = lib.makeOverridable (args: base) { };
+          in
+          cfg.packageOverride overridable
         else if lib.isDerivation cfg.packageOverride then
           cfg.packageOverride
-        else
+        else if cfg.packageOverride ? overrideInputs || cfg.packageOverride ? overrideAttrs then
+          # Attrs form: support overrideInputs and overrideAttrs
           let
-            overrideAttrsFn = cfg.packageOverride.overrideAttrs or (_: { });
-            params = builtins.removeAttrs cfg.packageOverride [ "overrideAttrs" ];
+            overridable = lib.makeOverridable (args: base) { };
+            withInputs = overridable.override (cfg.packageOverride.overrideInputs or { });
           in
-          (base.override params).overrideAttrs overrideAttrsFn
+          withInputs.overrideAttrs (cfg.packageOverride.overrideAttrs or (_: { }))
+        else
+          base
       else
         base
     else
