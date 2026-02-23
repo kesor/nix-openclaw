@@ -29,8 +29,8 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
         in
-        # Return an overridable function - users can use .override and .overrideAttrs on this
-        pkgs.lib.makeOverridable (pkgs.callPackage ./package.nix) {
+        # Return the raw callPackage - module will wrap in makeOverridable if needed
+        pkgs.callPackage ./package.nix {
           src = inputs.openclaw-src;
           pnpmDepsHash = pnpmDepsHash;
         };

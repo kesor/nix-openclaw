@@ -35,7 +35,11 @@ let
       if cfg.packageOverride == null then
         base
       else if lib.isFunction cfg.packageOverride then
-        cfg.packageOverride base
+        let
+          # Wrap in makeOverridable so user can use .override and .overrideAttrs
+          overridable = lib.makeOverridable (args: base) { };
+        in
+        cfg.packageOverride overridable
       else if lib.isDerivation cfg.packageOverride then
         cfg.packageOverride
       else
