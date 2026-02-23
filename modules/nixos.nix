@@ -98,11 +98,15 @@ in
         lib.types.oneOf [
           lib.types.package
           (lib.types.functionTo lib.types.package)
+          (lib.types.attrsOf lib.types.raw) # attrs with overrideInputs/overrideAttrs
         ]
       );
       default = null;
       description = ''
-        Override the OpenClaw package.
+        Override the OpenClaw package. Can be:
+        - a derivation (package)
+        - a function (pkg: ...) that returns a derivation
+        - attrs with overrideInputs and/or overrideAttrs
       '';
     };
 
