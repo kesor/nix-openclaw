@@ -26,7 +26,10 @@
       # Build package with optional pnpmDepsHash override
       mkOpenclawPackage =
         system: pnpmDepsHash:
-        (nixpkgs.legacyPackages.${system}).callPackage ./package.nix {
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.makeOverridable pkgs.callPackage ./package.nix {
           src = inputs.openclaw-src;
           pnpmDepsHash = pnpmDepsHash;
         };
