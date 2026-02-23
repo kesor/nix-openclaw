@@ -30,7 +30,7 @@ let
       throw "services.openclaw requires flake to be used (or set services.openclaw.package explicitly)"
     else
       let
-        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
+        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash { };
       in
       if cfg.packageOverride == null then
         base
@@ -45,10 +45,15 @@ let
       else if cfg.packageOverride ? overrideInputs || cfg.packageOverride ? overrideAttrs then
         # Attrs form: support overrideInputs and overrideAttrs
         let
-          overridable = lib.makeOverridable (args: base) { };
-          withInputs = overridable.override (cfg.packageOverride.overrideInputs or { });
+          overrides = cfg.packageOverride;
+          esbuildOverride = overrides.overrideInputs.esbuild or null;
+          versionOverride = overrides.overrideAttrs.version or null;
+          overrideAttrsFn = overrides.overrideAttrs or (_: { });
+          baseWithOverrides = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash {
+            inherit esbuildOverride versionOverride;
+          };
         in
-        withInputs.overrideAttrs (cfg.packageOverride.overrideAttrs or (_: { }))
+        baseWithOverrides.overrideAttrs overrideAttrsFn
       else
         throw ''
           services.openclaw.packageOverride must be:

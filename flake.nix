@@ -23,20 +23,28 @@
         "aarch64-linux"
       ];
 
-      # Build package with optional pnpmDepsHash override
+      # Build package with optional overrides
       mkOpenclawPackage =
         system: pnpmDepsHash:
+        {
+          esbuildOverride ? null,
+          versionOverride ? null,
+        }:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          finalEsbuild = if esbuildOverride != null then esbuildOverride else pkgs.esbuild;
+          finalVersion = if versionOverride != null then versionOverride else "0-unstable";
         in
         # Return the raw callPackage - module will wrap in makeOverridable if needed
         pkgs.callPackage ./package.nix {
           src = inputs.openclaw-src;
           pnpmDepsHash = pnpmDepsHash;
+          esbuild = finalEsbuild;
+          version = finalVersion;
         };
 
       # Default packages (uses fakeHash from package.nix by default)
-      packages = forAllSystems (system: mkOpenclawPackage system nixpkgs.lib.fakeHash);
+      packages = forAllSystems (system: mkOpenclawPackage system nixpkgs.lib.fakeHash { });
 
       # Pass to modules via a flake-like attribute set
       flakeForModules = {
