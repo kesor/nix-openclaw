@@ -44,9 +44,10 @@ let
           cfg.packageOverride
         else
           let
+            overrideInputs = cfg.packageOverride.overrideInputs or { };
             overrideAttrsFn = cfg.packageOverride.overrideAttrs or (_: { });
           in
-          base.overrideAttrs overrideAttrsFn
+          (base.override overrideInputs).overrideAttrs overrideAttrsFn
       else
         base
     else
