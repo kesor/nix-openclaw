@@ -14,54 +14,89 @@
   version ? "0-unstable",
 }:
 
-stdenv.mkDerivation (finalAttrs: {
-  pname = "openclaw";
-  inherit version src;
+lib.makeOverridable (
+  {
+    bun,
+    esbuild,
+    fetchPnpmDeps,
+    lib,
+    makeWrapper,
+    nodejs,
+    pkgs,
+    pnpm,
+    pnpmConfigHook,
+    pnpmDepsHash,
+    src,
+    stdenv,
+    version,
+  }:
+  stdenv.mkDerivation
+    (finalAttrs: {
+      pname = "openclaw";
+      inherit version src;
 
-  nativeBuildInputs = [
-    bun
-    makeWrapper
-    nodejs
-    pnpm
-    pnpmConfigHook
-  ];
+      nativeBuildInputs = [
+        bun
+        makeWrapper
+        nodejs
+        pnpm
+        pnpmConfigHook
+      ];
 
-  pnpmDeps = fetchPnpmDeps {
-    inherit (finalAttrs) pname version src;
-    hash = pnpmDepsHash;
-    fetcherVersion = 3;
-  };
+      pnpmDeps = fetchPnpmDeps {
+        inherit (finalAttrs) pname version src;
+        hash = pnpmDepsHash;
+        fetcherVersion = 3;
+      };
 
-  ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
-  OPENCLAW_PREFER_PNPM = "1";
+      ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
+      OPENCLAW_PREFER_PNPM = "1";
 
-  buildPhase = ''
-    runHook preBuild
-    pnpm build
-    pnpm ui:build
-    runHook postBuild
-  '';
+      buildPhase = ''
+        runHook preBuild
+        pnpm build
+        pnpm ui:build
+        runHook postBuild
+      '';
 
-  installPhase = ''
-    runHook preInstall
-    mkdir -p $out/lib/openclaw
-    cp -r . $out/lib/openclaw/
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/lib/openclaw
+        cp -r . $out/lib/openclaw/
 
-    mkdir -p $out/bin
-    makeWrapper ${nodejs}/bin/node $out/bin/openclaw \
-      --add-flags "$out/lib/openclaw/openclaw.mjs" \
-      --set NODE_ENV production
+        mkdir -p $out/bin
+        makeWrapper ${nodejs}/bin/node $out/bin/openclaw \
+          --add-flags "$out/lib/openclaw/openclaw.mjs" \
+          --set NODE_ENV production
 
-    makeWrapper ${nodejs}/bin/node $out/bin/openclaw-gateway \
-      --add-flags "$out/lib/openclaw/openclaw.mjs" \
-      --add-flags "gateway" \
-      --set NODE_ENV production
-    runHook postInstall
-  '';
+        makeWrapper ${nodejs}/bin/node $out/bin/openclaw-gateway \
+          --add-flags "$out/lib/openclaw/openclaw.mjs" \
+          --add-flags "gateway" \
+          --set NODE_ENV production
+        runHook postInstall
+      '';
 
-  meta = {
-    description = "OpenClaw – AI-powered application";
-    platforms = lib.platforms.linux;
-    mainProgram = "openclaw";
-  };
-})
+      meta = {
+        description = "OpenClaw – AI-powered application";
+        platforms = lib.platforms.linux;
+        mainProgram = "openclaw";
+      };
+    })
+    {
+      inherit
+        bun
+        esbuild
+        fetchPnpmDeps
+        lib
+        makeWrapper
+        nodejs
+        pkgs
+        pnpm
+        pnpmConfigHook
+        pnpmDepsHash
+        src
+        stdenv
+        version
+        ;
+    }
+)
