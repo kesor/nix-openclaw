@@ -38,9 +38,8 @@ let
         else
           let
             overrideAttrsFn = cfg.packageOverride.overrideAttrs or (_: { });
-            params = builtins.removeAttrs cfg.packageOverride [ "overrideAttrs" ];
           in
-          (base.override params).overrideAttrs overrideAttrsFn
+          base.overrideAttrs overrideAttrsFn
       else
         base
     else
