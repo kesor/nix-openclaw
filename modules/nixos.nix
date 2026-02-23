@@ -37,8 +37,9 @@ let
             overridableBase =
               lib.makeOverridable (flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash)
                 { };
+            overridden = cfg.packageOverride overridableBase;
           in
-          cfg.packageOverride overridableBase
+          overridden
         else if lib.isDerivation cfg.packageOverride then
           cfg.packageOverride
         else
