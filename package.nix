@@ -10,10 +10,11 @@
   pnpmConfigHook,
   pnpmDepsHash ? lib.fakeHash,
   src,
+  stdenv,
   version ? "0-unstable",
 }:
 
-lib.makeOverridable (finalAttrs: {
+stdenv.mkDerivation (finalAttrs: {
   pname = "openclaw";
   inherit version src;
 

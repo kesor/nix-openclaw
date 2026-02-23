@@ -28,11 +28,13 @@
         system: pnpmDepsHash:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          # Wrap in makeOverridable so users can use .override and .overrideAttrs
+          openclawPkg = pkgs.callPackage ./package.nix {
+            src = inputs.openclaw-src;
+            pnpmDepsHash = pnpmDepsHash;
+          };
         in
-        pkgs.callPackage ./package.nix {
-          src = inputs.openclaw-src;
-          pnpmDepsHash = pnpmDepsHash;
-        };
+        pkgs.lib.makeOverridable (args: openclawPkg) { };
 
       # Default packages (uses fakeHash from package.nix by default)
       packages = forAllSystems (system: mkOpenclawPackage system nixpkgs.lib.fakeHash);
