@@ -34,9 +34,7 @@ let
         if builtins.isFunction cfg.packageOverride then
           let
             # Wrap in makeOverridable so function can use .override and .overrideAttrs
-            overridableBase =
-              lib.makeOverridable (flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash)
-                { };
+            overridableBase = base;
             overridden = cfg.packageOverride overridableBase;
           in
           overridden
