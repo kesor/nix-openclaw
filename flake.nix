@@ -29,7 +29,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
         in
-        pkgs.lib.makeOverridable (pkgs.callPackage ./package.nix) {
+        pkgs.callPackage ./package.nix {
           src = inputs.openclaw-src;
           pnpmDepsHash = pnpmDepsHash;
         };
