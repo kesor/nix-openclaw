@@ -26,24 +26,42 @@ let
   openclawPackage =
     if cfg.package != null then
       cfg.package
-    else if flake != null then
-      let
-        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash;
-      in
-      if cfg.packageOverride != null then
-        if builtins.isFunction cfg.packageOverride then
-          cfg.packageOverride base
-        else if lib.isDerivation cfg.packageOverride then
-          cfg.packageOverride
-        else
-          let
-            overrideAttrsFn = cfg.packageOverride.overrideAttrs or (_: { });
-          in
-          base.overrideAttrs overrideAttrsFn
-      else
-        base
+    else if flake == null then
+      throw "services.openclaw requires flake to be used (or set services.openclaw.package explicitly)"
     else
-      throw "services.openclaw requires flake to be used";
+      let
+        base = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash { };
+      in
+      if cfg.packageOverride == null then
+        base
+      else if lib.isFunction cfg.packageOverride then
+        let
+          # Wrap in makeOverridable so user can use .overrideAttrs
+          overridable = lib.makeOverridable (args: base) { };
+        in
+        cfg.packageOverride overridable
+      else if lib.isDerivation cfg.packageOverride then
+        cfg.packageOverride
+      else if cfg.packageOverride ? overrideInputs || cfg.packageOverride ? overrideAttrs then
+        # Attrs form: support overrideInputs and overrideAttrs
+        let
+          overrides = cfg.packageOverride;
+          esbuildOverride = overrides.overrideInputs.esbuild or null;
+          versionOverride = overrides.overrideAttrs.version or null;
+          overrideAttrsFn = overrides.overrideAttrs or (_: { });
+          baseWithOverrides = flake.mkOpenclawPackage pkgs.stdenv.hostPlatform.system cfg.pnpmDepsHash {
+            inherit esbuildOverride versionOverride;
+          };
+        in
+        baseWithOverrides.overrideAttrs overrideAttrsFn
+      else
+        throw ''
+          services.openclaw.packageOverride must be:
+          - null
+          - a derivation (package)
+          - a function (pkg: ...) that returns a derivation
+          - or attrs with overrideInputs and/or overrideAttrs
+        '';
 
   gitTrackScript = common.mkGitTrackScript {
     dataDir = cfg.dataDir;
@@ -83,33 +101,17 @@ in
     packageOverride = lib.mkOption {
       type = lib.types.nullOr (
         lib.types.oneOf [
-          lib.types.attrs
-          (lib.types.functionTo lib.types.package)
           lib.types.package
+          (lib.types.functionTo lib.types.package)
+          (lib.types.attrsOf lib.types.raw) # attrs with overrideInputs/overrideAttrs
         ]
       );
       default = null;
       description = ''
-        Override the package. Use:
-        - Attrs to override package function parameters:
-          ```nix
-          services.openclaw.packageOverride = {
-            nodejs = pkgs.nodejs_20;
-          };
-          ```
-        - Or a function to modify the package:
-          ```nix
-          services.openclaw.packageOverride = pkg: pkg.overrideAttrs (old: {
-            patches = [ ./my-fix.patch ];
-          });
-          ```
-        - Chain both by using a function:
-          ```nix
-          services.openclaw.packageOverride = pkg:
-            (pkg.override { nodejs = pkgs.nodejs_20; }).overrideAttrs (old: {
-              patches = [ ./my-fix.patch ];
-            });
-          ```
+        Override the OpenClaw package. Can be:
+        - a derivation (package)
+        - a function (pkg: ...) that returns a derivation
+        - attrs with overrideInputs and/or overrideAttrs
       '';
     };
 
