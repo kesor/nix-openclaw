@@ -31,15 +31,34 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     hash = pnpmDepsHash;
-    installFlags = [ "--ignore-scripts" ];
-    preInstall = ''
-      export HOME=$(mktemp -d)
-      export XDG_DATA_HOME=$HOME/.local/share
-      export XDG_CACHE_HOME=$HOME/.cache
+    fetcherVersion = 3;
+    preConfigure = ''
+      export HOME=$(mktemp -d -p "$TMPDIR" pnpm-home.XXXXXX)
+      mkdir -p "$HOME/.local/share/pnpm" "$HOME/.cache/pnpm" "$HOME/.config"
+      export PNPM_HOME="$HOME/.local/share/pnpm"
+      export PATH="$PNPM_HOME:$PATH"
+      # Critical: tell pnpm NOT to manage its own binary
+      export COREPACK_NPM_REGISTRY="https://registry.npmjs.org"
+      pnpm config set --location project node-linker hoisted
+      pnpm config set --location project shamefully-hoist true
       pnpm config set package-import-method copy
     '';
-    fetcherVersion = 3;
-    extraArgs = [ "--config=global-dir=$HOME/.local/share/pnpm" ];
+    extraArgs = [
+      "--ignore-scripts"
+      "--frozen-lockfile"
+      "--prefer-offline"
+      "--no-optional" # skip optional deps that might trigger tools
+      "--config=use-node-version=false" # try to avoid version switching
+      "--config=strict-peer-dependencies=false"
+      "--config=global-dir=$HOME/.local/share/pnpm"
+    ];
+
+    # If still tries to switch → patch package.json to remove "packageManager" field
+    postUnpack = ''
+      substituteInPlace source/package.json \
+        --replace-fail '"packageManager": "pnpm@10.23.0"' '"packageManager": "pnpm@10.0.0"' \
+        || true
+    '';
   };
 
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
