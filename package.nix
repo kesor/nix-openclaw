@@ -32,6 +32,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) pname version src;
     hash = pnpmDepsHash;
     fetcherVersion = 3;
+    nativeBuildInputs = [ pkgs.gitMinimal ];
     preConfigure = ''
       export HOME=$(mktemp -d -p "$TMPDIR" pnpm-home.XXXXXX)
       mkdir -p "$HOME/.local/share/pnpm" "$HOME/.cache/pnpm" "$HOME/.config"
