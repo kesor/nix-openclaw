@@ -2,6 +2,7 @@
   bun,
   esbuild,
   fetchPnpmDeps,
+  git,
   lib,
   makeWrapper,
   nodejs ? pkgs.nodejs_22,
@@ -20,6 +21,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     bun
+    git
     makeWrapper
     nodejs
     pnpm
