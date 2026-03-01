@@ -33,9 +33,13 @@ stdenv.mkDerivation (finalAttrs: {
     hash = pnpmDepsHash;
     installFlags = [ "--ignore-scripts" ];
     preInstall = ''
+      export HOME=$(mktemp -d)
+      export XDG_DATA_HOME=$HOME/.local/share
+      export XDG_CACHE_HOME=$HOME/.cache
       pnpm config set package-import-method copy
     '';
     fetcherVersion = 3;
+    extraArgs = [ "--config=global-dir=$HOME/.local/share/pnpm" ];
   };
 
   ESBUILD_BINARY_PATH = "${esbuild}/bin/esbuild";
