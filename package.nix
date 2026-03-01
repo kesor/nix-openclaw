@@ -31,6 +31,10 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     hash = pnpmDepsHash;
+    installFlags = [ "--ignore-scripts" ];
+    preInstall = ''
+      pnpm config set package-import-method copy
+    '';
     fetcherVersion = 3;
   };
 
