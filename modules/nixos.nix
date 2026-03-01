@@ -890,9 +890,8 @@ in
       requires = lib.optional cfg.browser.useVirtualDisplay "openclaw-xvfb.service";
       wantedBy = [ "default.target" ];
       preStart = ''
-        mkdir -p ${cfg.dataDir}/.chrome-extension
-        cp -r ${openclawPackage}/lib/openclaw/assets/chrome-extension/* ${cfg.dataDir}/.chrome-extension/
-        chown -R ${cfg.user}:${cfg.group} ${cfg.dataDir}/.chrome-extension
+        rm -rf ${cfg.dataDir}/.chrome-extension
+        cp -r ${openclawPackage}/lib/openclaw/assets/chrome-extension ${cfg.dataDir}/.chrome-extension
       '';
       serviceConfig = {
         Type = "simple";
