@@ -43,6 +43,7 @@ stdenv.mkDerivation (finalAttrs: {
       pnpm config set --location project shamefully-hoist true
       pnpm config set package-import-method copy
     '';
+    installFlags = [ "--ignore-scripts" ];
     extraArgs = [
       "--ignore-scripts"
       "--frozen-lockfile"
@@ -52,12 +53,12 @@ stdenv.mkDerivation (finalAttrs: {
       "--config=strict-peer-dependencies=false"
       "--config=global-dir=$HOME/.local/share/pnpm"
     ];
-
-    # If still tries to switch → patch package.json to remove "packageManager" field
     postUnpack = ''
-      substituteInPlace source/package.json \
-        --replace-fail '"packageManager": "pnpm@10.23.0"' '"packageManager": "pnpm@10.0.0"' \
-        || true
+      find source -type f -name package.json -print0 | xargs -0 sed -i \
+        -e '/"prepare"/s/".*"/"prepare": "echo skipped husky"/' \
+        -e '/"postinstall"/s/".*"/"postinstall": "echo skipped"/' \
+        -e '/"prepublishOnly"/s/".*"/"prepublishOnly": "echo skipped"/' || true
+      find source -type f -path '*/node_modules/husky/*.js' -exec sed -i 's/git/echo skipped git/g' {} + || true
     '';
   };
 
