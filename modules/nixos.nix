@@ -892,6 +892,7 @@ in
       preStart = ''
         rm -rf ${cfg.dataDir}/.chrome-extension
         cp -r ${openclawPackage}/lib/openclaw/assets/chrome-extension ${cfg.dataDir}/.chrome-extension
+        chmod ug+w ${cfg.dataDir}/.chrome-extension
       '';
       serviceConfig = {
         Type = "simple";
