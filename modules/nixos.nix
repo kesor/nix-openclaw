@@ -274,6 +274,14 @@ in
     # ── ACPX integration ────────────────────────────────────────────────────
     acpx = {
       enable = lib.mkEnableOption "ACPX agent-to-agent protocol support";
+      hash = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          SHA256 hash of the acpx npm package. Required for production builds.
+          Run `nix build` to get the expected hash error with the correct value.
+        '';
+      };
     };
 
     # ── Shell access ─────────────────────────────────────────────────────────
@@ -729,7 +737,7 @@ in
       pkgs.jq
     ]
     ++ lib.optionals cfg.clawhub.enable [ (pkgs.callPackage ../clawhub.nix { }) ]
-    ++ lib.optionals cfg.acpx.enable [ (pkgs.callPackage ../acpx.nix { }) ];
+    ++ lib.optionals cfg.acpx.enable [ (pkgs.callPackage ../acpx.nix { hash = cfg.acpx.hash; }) ];
 
     # ── User services conversion ─────────────────────────────────────────────
     systemd.user.services.openclaw-gateway = lib.mkIf cfg.runAsUserServices {
