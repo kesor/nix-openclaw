@@ -1,40 +1,43 @@
 {
   lib,
-  stdenv,
-  fetchurl,
+  fetchPnpmDeps,
+  pnpm,
+  pnpmConfigHook,
   nodejs,
-  hash ? "sha256-f3a4f5c80bd003026f00b18c7784be2c8aa9fe7664ababa4f12ddaafb3fa88dd",
+  stdenv,
+  fetchFromGitHub,
 }:
 
-let
-  version = "0.3.0";
-  tarball = fetchurl {
-    url = "https://registry.npmjs.org/acpx/-/acpx-${version}.tgz";
-    sha256 = hash;
-  };
-in
-
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "acpx";
-  inherit version;
+  version = "0.3.0";
 
-  nativeBuildInputs = [ nodejs ];
+  src = fetchFromGitHub {
+    owner = "openclaw";
+    repo = "acpx";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-qmLSIQJWyTB50YVTUIk4fya9VyHWnhNF0l6l8Pd8rC8=";
+  };
 
-  src = tarball;
+  nativeBuildInputs = [
+    pnpm
+    pnpmConfigHook
+    nodejs
+  ];
 
-  unpackPhase = ''
-    mkdir -p $out/lib/node_modules
-    tar -xzf $src -C $out/lib/node_modules
+  pnpmDeps = fetchPnpmDeps {
+    inherit (finalAttrs) pname version src;
+    hash = "sha256-4F2T5dDznY9iV7pR3qLk8jX2mW1sN0tU6oA5vX4cZs=";
+    fetcherVersion = 3;
+  };
+
+  buildPhase = ''
+    pnpm build
   '';
 
   installPhase = ''
     mkdir -p $out/bin
-    if [ -d "$out/lib/node_modules/.bin" ]; then
-      for f in $out/lib/node_modules/.bin/*; do
-        name=$(basename $f)
-        [ ! -e "$out/bin/$name" ] && ln -sf "$f" "$out/bin/$name"
-      done
-    fi
+    ln -sf $out/lib/node_modules/.bin/acpx $out/bin/acpx
   '';
 
   meta = {
@@ -44,4 +47,4 @@ stdenv.mkDerivation rec {
     mainProgram = "acpx";
     platforms = lib.platforms.linux;
   };
-}
+})
