@@ -72,8 +72,11 @@ stdenv.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
     mkdir -p $out/lib/node_modules/acpx
+    # Copy built dist and package.json
     cp -r dist $out/lib/node_modules/acpx/
     cp -r package.json $out/lib/node_modules/acpx/
+    # Copy node_modules from build
+    cp -r node_modules $out/lib/node_modules/
     mkdir -p $out/bin
     # Wrap with nodejs
     makeWrapper ${nodejs}/bin/node $out/bin/acpx --add-flags "$out/lib/node_modules/acpx/dist/cli.js"
