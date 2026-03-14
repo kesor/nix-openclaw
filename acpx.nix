@@ -1,34 +1,42 @@
 {
   lib,
   stdenv,
+  fetchurl,
   nodejs,
-  cacert,
 }:
+
+let
+  version = "0.3.0";
+  # Fetch from npm registry - hash will be computed by nix
+  tarball = fetchurl {
+    url = "https://registry.npmjs.org/acpx/-/acpx-${version}.tgz";
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  };
+in
 
 stdenv.mkDerivation rec {
   pname = "acpx";
-  version = "0.0.0";
+  inherit version;
 
   nativeBuildInputs = [
     nodejs
-    cacert
   ];
 
-  dontUnpack = true;
+  src = tarball;
 
-  buildPhase = ''
-    export HOME=$TMPDIR
-    export npm_config_cache=$TMPDIR/npm-cache
-    mkdir -p $npm_config_cache
-    npm install --global --prefix=$out acpx@latest
+  unpackPhase = ''
+    mkdir -p $out/lib/node_modules
+    tar -xzf $src -C $out/lib/node_modules
   '';
 
   installPhase = ''
     mkdir -p $out/bin
-    for f in $out/lib/node_modules/.bin/*; do
-      name=$(basename $f)
-      [ ! -e "$out/bin/$name" ] && ln -sf "$f" "$out/bin/$name"
-    done
+    if [ -d "$out/lib/node_modules/.bin" ]; then
+      for f in $out/lib/node_modules/.bin/*; do
+        name=$(basename $f)
+        [ ! -e "$out/bin/$name" ] && ln -sf "$f" "$out/bin/$name"
+      done
+    fi
   '';
 
   meta = {
