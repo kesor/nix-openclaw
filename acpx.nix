@@ -3,12 +3,11 @@
   stdenv,
   fetchurl,
   nodejs,
-  hash ? null,
+  hash ? "sha256-f3a4f5c80bd003026f00b18c7784be2c8aa9fe7664ababa4f12ddaafb3fa88dd",
 }:
 
 let
   version = "0.3.0";
-  # Fetch from npm registry - hash will be computed by nix if not provided
   tarball = fetchurl {
     url = "https://registry.npmjs.org/acpx/-/acpx-${version}.tgz";
     sha256 = hash;
