@@ -451,7 +451,11 @@ in
       packages = lib.optionals cfg.shell.enable (
         cfg.shell.extraPackages
         ++ [ openclawPackage ]
-        ++ lib.optionals cfg.acpx.enable [ (pkgs.callPackage ../acpx.nix { hash = cfg.acpx.hash; }) ]
+        ++ lib.optionals cfg.acpx.enable [
+          (pkgs.callPackage ../acpx.nix (
+            { } // lib.optionalAttrs (cfg.acpx.hash != null) { hash = cfg.acpx.hash; }
+          ))
+        ]
       );
     };
     users.groups.${cfg.group} = { };
@@ -467,6 +471,7 @@ in
     # Source environment files in openclaw user's bash profile
     system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
+      export PATH="/run/current-system/sw/bin:/etc/profiles/per-user/${cfg.user}/bin:$HOME/.nix-profile/bin:$PATH"
       ${lib.concatMapStringsSep "\n" (
         f: "[ -f ${f} ] && set -a && source ${f} && set +a"
       ) cfg.environmentFiles}
