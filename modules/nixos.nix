@@ -271,6 +271,11 @@ in
       enable = lib.mkEnableOption "ClawHub skill registry integration (via npx)";
     };
 
+    # ── ACPX integration ────────────────────────────────────────────────────
+    acpx = {
+      enable = lib.mkEnableOption "ACPX agent-to-agent protocol support";
+    };
+
     # ── Shell access ─────────────────────────────────────────────────────────
     shell = {
       enable = lib.mkEnableOption "interactive shell access for openclaw user";
@@ -483,7 +488,8 @@ in
       ++ lib.optionals cfg.clawhub.enable [
         "d ${cfg.dataDir}/cache/clawhub 0750 ${o} ${g} -"
         "d ${cfg.dataDir}/skills 0750 ${o} ${g} -"
-      ];
+      ]
+      ++ lib.optionals cfg.acpx.enable [ "d ${cfg.dataDir}/acpx 0750 ${o} ${g} -" ];
 
     # ── ROCm hardware ────────────────────────────────────────────────────────
     hardware.graphics = lib.mkIf cfg.rocm.enable {
@@ -524,6 +530,7 @@ in
         OPENCLAW_NIXOS_PROPOSALS_DIR = "${cfg.dataDir}/nixos-proposals";
       }
       // lib.optionalAttrs cfg.clawhub.enable { CLAWHUB_CACHE_DIR = "${cfg.dataDir}/cache/clawhub"; }
+      // lib.optionalAttrs cfg.acpx.enable { ACPX_DATA_DIR = "${cfg.dataDir}/acpx"; }
       // cfg.extraEnvironment;
 
       serviceConfig = {
@@ -721,7 +728,8 @@ in
       pkgs.git
       pkgs.jq
     ]
-    ++ lib.optionals cfg.clawhub.enable [ (pkgs.callPackage ../clawhub.nix { }) ];
+    ++ lib.optionals cfg.clawhub.enable [ (pkgs.callPackage ../clawhub.nix { }) ]
+    ++ lib.optionals cfg.acpx.enable [ (pkgs.callPackage ../acpx.nix { }) ];
 
     # ── User services conversion ─────────────────────────────────────────────
     systemd.user.services.openclaw-gateway = lib.mkIf cfg.runAsUserServices {
@@ -753,6 +761,7 @@ in
         OPENCLAW_NIXOS_PROPOSALS_DIR = "${cfg.dataDir}/nixos-proposals";
       }
       // lib.optionalAttrs cfg.clawhub.enable { CLAWHUB_CACHE_DIR = "${cfg.dataDir}/cache/clawhub"; }
+      // lib.optionalAttrs cfg.acpx.enable { ACPX_DATA_DIR = "${cfg.dataDir}/acpx"; }
       // cfg.extraEnvironment;
       serviceConfig = {
         Type = "simple";
