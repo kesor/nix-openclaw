@@ -6,38 +6,80 @@
   nodejs,
   stdenv,
   fetchFromGitHub,
+  makeWrapper,
+  version ? "0.3.0",
+  hash ? "sha256-qmLSIQJWyTB50YVTUIk4fya9VyHWnhNF0l6l8Pd8rC8=",
+  pnpmDepsHash ? "sha256-jDVMymm60F+bFpJiG6G8XH/Ki4DIZyEluRkX+DJuyrY=",
 }:
-
 stdenv.mkDerivation (finalAttrs: {
   pname = "acpx";
-  version = "0.3.0";
+  inherit version;
 
   src = fetchFromGitHub {
+    inherit hash;
     owner = "openclaw";
     repo = "acpx";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-qmLSIQJWyTB50YVTUIk4fya9VyHWnhNF0l6l8Pd8rC8=";
+    tag = "v${version}";
   };
 
   nativeBuildInputs = [
     pnpm
     pnpmConfigHook
     nodejs
+    makeWrapper
   ];
 
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
-    hash = "sha256-4F2T5dDznY9iV7pR3qLk8jX2mW1sN0tU6oA5vX4cZs=";
+    hash = pnpmDepsHash;
     fetcherVersion = 3;
+    preConfigure = ''
+      export HOME=$(mktemp -d -p "$TMPDIR" pnpm-home.XXXXXX)
+      mkdir -p "$HOME/.local/share/pnpm" "$HOME/.cache/pnpm" "$HOME/.config"
+      export PNPM_HOME="$HOME/.local/share/pnpm"
+      export PATH="$PNPM_HOME:$PATH"
+      # Critical: tell pnpm NOT to manage its own binary
+      export COREPACK_NPM_REGISTRY="https://registry.npmjs.org"
+      pnpm config set --location project node-linker hoisted
+      pnpm config set --location project shamefully-hoist true
+      pnpm config set package-import-method copy
+    '';
+    installFlags = [ "--ignore-scripts" ];
+    extraArgs = [
+      "--ignore-scripts"
+      "--frozen-lockfile"
+      "--prefer-offline"
+      "--no-optional" # skip optional deps that might trigger tools
+      "--config=use-node-version=false" # try to avoid version switching
+      "--config=strict-peer-dependencies=false"
+      "--config=global-dir=$HOME/.local/share/pnpm"
+    ];
+    postUnpack = ''
+      find source -type f -name package.json -print0 | xargs -0 sed -i \
+        -e '/"prepare"/s/".*"/"prepare": "echo skipped husky"/' \
+        -e '/"postinstall"/s/".*"/"postinstall": "echo skipped"/' \
+        -e '/"prepublishOnly"/s/".*"/"prepublishOnly": "echo skipped"/' || true
+      find source -type f -path '*/node_modules/husky/*.js' -exec sed -i 's/git/echo skipped git/g' {} + || true
+    '';
   };
 
   buildPhase = ''
+    runHook preBuild
     pnpm build
+    runHook postBuild
   '';
 
   installPhase = ''
+    runHook preInstall
+    mkdir -p $out/lib/node_modules/acpx
+    cp -r dist $out/lib/node_modules/acpx/
+    cp -r package.json $out/lib/node_modules/acpx/
     mkdir -p $out/bin
-    ln -sf $out/lib/node_modules/.bin/acpx $out/bin/acpx
+    ln -sf $out/lib/node_modules/acpx/dist/cli.js $out/bin/acpx
+    chmod +x $out/bin/acpx
+    # Wrap with nodejs
+    makeWrapper ${nodejs}/bin/node $out/bin/acpx --add-flags "$out/lib/node_modules/acpx/dist/cli.js"
+    runHook postInstall
   '';
 
   meta = {
