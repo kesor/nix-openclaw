@@ -3,14 +3,15 @@
   stdenv,
   fetchurl,
   nodejs,
+  hash ? null,
 }:
 
 let
   version = "0.3.0";
-  # Fetch from npm registry - hash will be computed by nix
+  # Fetch from npm registry - hash will be computed by nix if not provided
   tarball = fetchurl {
     url = "https://registry.npmjs.org/acpx/-/acpx-${version}.tgz";
-    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    sha256 = hash;
   };
 in
 
@@ -18,9 +19,7 @@ stdenv.mkDerivation rec {
   pname = "acpx";
   inherit version;
 
-  nativeBuildInputs = [
-    nodejs
-  ];
+  nativeBuildInputs = [ nodejs ];
 
   src = tarball;
 
