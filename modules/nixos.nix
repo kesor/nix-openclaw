@@ -467,7 +467,7 @@ in
     # Source environment files in openclaw user's bash profile
     system.activationScripts.openclaw-bashrc = lib.mkIf cfg.shell.enable ''
       cat > ${cfg.dataDir}/.bashrc << 'EOF'
-      export PATH="$HOME/.nix-profile/bin:$PATH"
+      export PATH="/run/current-system/sw/bin:$HOME/.nix-profile/bin:$PATH"
       ${lib.concatMapStringsSep "\n" (
         f: "[ -f ${f} ] && set -a && source ${f} && set +a"
       ) cfg.environmentFiles}
