@@ -75,8 +75,6 @@ stdenv.mkDerivation (finalAttrs: {
     cp -r dist $out/lib/node_modules/acpx/
     cp -r package.json $out/lib/node_modules/acpx/
     mkdir -p $out/bin
-    ln -sf $out/lib/node_modules/acpx/dist/cli.js $out/bin/acpx
-    chmod +x $out/bin/acpx
     # Wrap with nodejs
     makeWrapper ${nodejs}/bin/node $out/bin/acpx --add-flags "$out/lib/node_modules/acpx/dist/cli.js"
     runHook postInstall
