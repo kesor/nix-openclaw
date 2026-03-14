@@ -448,7 +448,11 @@ in
         "video"
         "render"
       ];
-      packages = lib.optionals cfg.shell.enable (cfg.shell.extraPackages ++ [ openclawPackage ]);
+      packages = lib.optionals cfg.shell.enable (
+        cfg.shell.extraPackages
+        ++ [ openclawPackage ]
+        ++ lib.optionals cfg.acpx.enable [ (pkgs.callPackage ../acpx.nix { hash = cfg.acpx.hash; }) ]
+      );
     };
     users.groups.${cfg.group} = { };
 
